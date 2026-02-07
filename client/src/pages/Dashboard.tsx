@@ -18,6 +18,7 @@ import { useJobs, useUpdateJob, useDeleteJob, useDuplicateJob } from "@/hooks/us
 import { useOperators } from "@/hooks/use-operators";
 import { JobCard } from "@/components/JobCard";
 import { CreateJobDialog } from "@/components/CreateJobDialog";
+import { PlaceHoldDialog } from "@/components/PlaceHoldDialog";
 import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -92,6 +93,7 @@ function DayCell({
   onCancel,
   onRestore,
   onCellClick,
+  onPlaceHold,
   isEvenRow,
 }: { 
   date: string, 
@@ -104,8 +106,31 @@ function DayCell({
   onCancel: (job: Job) => void,
   onRestore: (job: Job) => void,
   onCellClick: (date: string, operatorId: number) => void,
+  onPlaceHold: (date: string, operatorId: number) => void,
   isEvenRow?: boolean,
 }) {
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const dismiss = () => setCtxMenu(null);
+    window.addEventListener("click", dismiss);
+    window.addEventListener("contextmenu", dismiss);
+    window.addEventListener("scroll", dismiss, true);
+    return () => {
+      window.removeEventListener("click", dismiss);
+      window.removeEventListener("contextmenu", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
+    };
+  }, [ctxMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('[data-testid^="card-job-"]')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  };
+
   return (
     <DroppableDay 
       id={`cell-${operatorId}-${date}`} 
@@ -119,6 +144,7 @@ function DayCell({
       <div 
         className="h-full min-h-[60px]" 
         onClick={() => onCellClick(date, operatorId)}
+        onContextMenu={handleContextMenu}
         data-testid={`cell-${operatorId}-${date}`}
       >
         {jobs.map((job) => (
@@ -134,6 +160,26 @@ function DayCell({
           </div>
         ))}
       </div>
+      {ctxMenu && (
+        <div
+          className="fixed z-50 min-w-[160px] rounded-md border bg-popover p-1 shadow-md"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          data-testid={`cell-context-menu-${operatorId}-${date}`}
+        >
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover-elevate cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCtxMenu(null);
+              onPlaceHold(date, operatorId);
+            }}
+            data-testid={`menu-place-hold-${operatorId}-${date}`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Place Hold
+          </button>
+        </div>
+      )}
     </DroppableDay>
   );
 }
@@ -217,6 +263,7 @@ export default function Dashboard() {
   const [splitPercent, setSplitPercent] = useState(65);
   const [cancelledExpanded, setCancelledExpanded] = useState(false);
   const [standbyExpanded, setStandbyExpanded] = useState(true);
+  const [holdDialog, setHoldDialog] = useState<{ open: boolean; date: string; operatorId: number }>({ open: false, date: "", operatorId: 0 });
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -295,6 +342,10 @@ export default function Dashboard() {
     updateJob.mutate({ id: job.id, status: "ready" });
     toast({ title: "Job Restored", description: `${(job as any).customer?.name || "Job"} has been restored to the board as Ready` });
   }, [updateJob, toast]);
+
+  const handlePlaceHold = useCallback((date: string, operatorId: number) => {
+    setHoldDialog({ open: true, date, operatorId });
+  }, []);
 
   const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -611,6 +662,7 @@ export default function Dashboard() {
                             onCancel={handleCancel}
                             onRestore={handleRestore}
                             onCellClick={(date, opId) => { setSelectedJob(null); setDefaultDate(date); setDefaultOperatorId(opId); setIsCreateOpen(true); }}
+                            onPlaceHold={handlePlaceHold}
                             isEvenRow={isEven}
                           />
                         </div>
@@ -783,6 +835,13 @@ export default function Dashboard() {
         initialData={selectedJob}
         defaultDate={defaultDate}
         defaultOperatorId={defaultOperatorId}
+      />
+
+      <PlaceHoldDialog
+        open={holdDialog.open}
+        onOpenChange={(open) => setHoldDialog(prev => ({ ...prev, open }))}
+        date={holdDialog.date}
+        operatorId={holdDialog.operatorId}
       />
     </div>
   );
