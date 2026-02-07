@@ -37,6 +37,7 @@ export const operators = pgTable("operators", {
   qualifications: text("qualifications").array(),
   groupName: text("group_name").notNull(),
   color: text("color").default("#3b82f6"),
+  operatorType: text("operator_type").default("operator").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   isOutOfState: boolean("is_out_of_state").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),

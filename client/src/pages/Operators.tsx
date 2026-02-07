@@ -15,6 +15,14 @@ import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown, MapPin
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { getOperatorColor, getOperatorTypeLabel } from "@/lib/operator-colors";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Popover,
   PopoverContent,
@@ -78,7 +86,7 @@ export default function Operators() {
                 <div className="flex items-center gap-3">
                   <div 
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
-                    style={{ backgroundColor: op.color || '#3b82f6' }}
+                    style={{ backgroundColor: getOperatorColor(op) }}
                   >
                     {op.name.substring(0, 2).toUpperCase()}
                   </div>
@@ -89,7 +97,7 @@ export default function Operators() {
                         <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 dark:text-amber-400">OOS</Badge>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">{op.groupName}</p>
+                    <p className="text-xs text-muted-foreground">{op.groupName} &middot; {getOperatorTypeLabel(op.operatorType)}</p>
                   </div>
                 </div>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -272,14 +280,17 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
   const isPending = createOp.isPending || updateOp.isPending;
   const [selectedQuals, setSelectedQuals] = useState<string[]>([]);
   const [isOutOfState, setIsOutOfState] = useState(false);
+  const [operatorType, setOperatorType] = useState<string>("operator");
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && initialData) {
       setSelectedQuals(initialData.qualifications || []);
       setIsOutOfState(initialData.isOutOfState || false);
+      setOperatorType(initialData.operatorType || "operator");
     } else if (isOpen) {
       setSelectedQuals([]);
       setIsOutOfState(false);
+      setOperatorType("operator");
     }
     onOpenChange(isOpen);
   };
@@ -292,7 +303,7 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
       groupName: formData.get("groupName") as string,
       phone: formData.get("phone") as string,
       truckLocation: formData.get("truckLocation") as string,
-      color: formData.get("color") as string,
+      operatorType,
       qualifications: selectedQuals,
       isOutOfState,
     };
@@ -324,11 +335,16 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
               <Input id="groupName" name="groupName" defaultValue={initialData?.groupName} required placeholder="e.g. Milwaukee" data-testid="input-operator-group" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="color">Color Identifier</Label>
-              <div className="flex gap-2">
-                <Input type="color" id="color" name="color" className="w-12 p-1" defaultValue={initialData?.color || "#3b82f6"} />
-                <Input type="text" value={initialData?.color} disabled className="flex-1 opacity-50" />
-              </div>
+              <Label>Type</Label>
+              <Select value={operatorType} onValueChange={setOperatorType}>
+                <SelectTrigger data-testid="select-operator-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="operator">Operator</SelectItem>
+                  <SelectItem value="assistant">Assistant Operator</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="space-y-2">

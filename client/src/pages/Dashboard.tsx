@@ -20,6 +20,7 @@ import { JobCard } from "@/components/JobCard";
 import { CreateJobDialog } from "@/components/CreateJobDialog";
 import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getOperatorColor } from "@/lib/operator-colors";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { DroppableDay } from "@/components/DroppableDay";
 import { useToast } from "@/hooks/use-toast";
@@ -367,7 +368,7 @@ export default function Dashboard() {
 
         if (markerLat != null && markerLng != null) {
           bounds.extend([markerLat, markerLng]);
-          const icon = createTruckMarkerIcon(op.color || "#3b82f6");
+          const icon = createTruckMarkerIcon(getOperatorColor(op));
           const outOfStateBadge = op.isOutOfState
             ? '<div style="font-size:10px;color:#f59e0b;font-weight:600;margin-top:4px;">OUT OF STATE</div>'
             : '';
@@ -542,7 +543,7 @@ export default function Dashboard() {
                             <div className="flex items-center gap-2">
                               <div 
                                 className="w-2 h-10 rounded-full shrink-0" 
-                                style={{ backgroundColor: operator.color || '#3b82f6' }} 
+                                style={{ backgroundColor: getOperatorColor(operator) }} 
                               />
                               <div className="min-w-0">
                                 <div className="font-bold text-sm leading-tight truncate">{operator.name}</div>
