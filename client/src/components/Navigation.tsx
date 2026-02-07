@@ -7,8 +7,7 @@ import {
   Truck, 
   LogOut, 
   Menu,
-  LayoutDashboard,
-  Map
+  LayoutDashboard
 } from "lucide-react";
 import {
   Sheet,
@@ -26,7 +25,6 @@ export function Navigation() {
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/schedule", label: "Schedule Board", icon: CalendarDays },
-    { href: "/map", label: "Map", icon: Map },
     { href: "/operators", label: "Operators", icon: Truck },
     { href: "/customers", label: "Customers", icon: Users },
   ];

@@ -92,6 +92,35 @@ export function useUpdateJob() {
   });
 }
 
+export function useDuplicateJob() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (job: any) => {
+      const { id, createdAt, customer, operator, ...jobData } = job;
+      const res = await fetch(api.jobs.create.path, {
+        method: api.jobs.create.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(jobData),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to duplicate job");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.jobs.list.path] });
+      toast({ title: "Success", description: "Job duplicated successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useDeleteJob() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

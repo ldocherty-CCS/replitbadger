@@ -65,6 +65,19 @@ Preferred communication style: Simple, everyday language.
 Jobs use a color-coded status system critical for visual hierarchy:
 - `dispatched` (green), `unavailable` (red), `ready` (blue), `ticket_created` (sky blue), `existing` (gray), `missing_info` (pink), `not_qualified` (orange)
 
+### Dashboard Features
+- **Schedule Board**: Weekly grid of operators x days with drag-and-drop job assignment
+- **Collapsible Map Panel**: Embedded Leaflet map at bottom of dashboard showing:
+  - Job locations as colored circle markers (color = job status)
+  - Operator truck parking locations as square markers with truck icons (color = operator color)
+- **Right-Click Context Menu** on job cards:
+  - Duplicate Job
+  - Change Status (submenu with all 7 status options)
+  - Delete Job
+
+### Operator Truck Locations
+Operators have `truckLat` and `truckLng` fields for mapping their truck parking location on the dashboard map.
+
 ## External Dependencies
 
 ### Required Services

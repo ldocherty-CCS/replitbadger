@@ -140,27 +140,33 @@ async function seedDatabase() {
       name: "John Doe",
       groupName: "Milwaukee Organic",
       truckLocation: "123 Main St, Milwaukee, WI",
+      truckLat: 43.0389,
+      truckLng: -87.9065,
       qualifications: ["Enbridge", "ESN"],
       isActive: true,
-      color: "#3b82f6" // blue-500
+      color: "#3b82f6"
     });
     
     const op2 = await storage.createOperator({
       name: "Jane Smith",
       groupName: "Milwaukee Organic",
       truckLocation: "456 Oak Ave, Milwaukee, WI",
+      truckLat: 43.0451,
+      truckLng: -87.9093,
       qualifications: ["NNG"],
       isActive: true,
-      color: "#10b981" // emerald-500
+      color: "#10b981"
     });
 
     const op3 = await storage.createOperator({
       name: "Mike Johnson",
       groupName: "Out-of-State",
       truckLocation: "789 Pine Ln, Chicago, IL",
+      truckLat: 41.8781,
+      truckLng: -87.6298,
       qualifications: ["Enbridge", "NNG", "ESN"],
       isActive: true,
-      color: "#f59e0b" // amber-500
+      color: "#f59e0b"
     });
 
     // Create Customers

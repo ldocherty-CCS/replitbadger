@@ -24,10 +24,12 @@ export const operators = pgTable("operators", {
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
-  truckLocation: text("truck_location"), // Address or coordinates
-  qualifications: text("qualifications").array(), // List of certs
-  groupName: text("group_name").notNull(), // e.g., "Milwaukee Organic"
-  color: text("color").default("#3b82f6"), // Visual identifier
+  truckLocation: text("truck_location"),
+  truckLat: doublePrecision("truck_lat"),
+  truckLng: doublePrecision("truck_lng"),
+  qualifications: text("qualifications").array(),
+  groupName: text("group_name").notNull(),
+  color: text("color").default("#3b82f6"),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });

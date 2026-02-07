@@ -12,7 +12,6 @@ import Dashboard from "@/pages/Dashboard";
 import Operators from "@/pages/Operators";
 import Customers from "@/pages/Customers";
 import Jobs from "@/pages/Jobs";
-import MapView from "@/pages/MapView";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/not-found";
 
@@ -54,7 +53,6 @@ function Router() {
       <Route path="/schedule" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/operators" component={() => <ProtectedRoute component={Operators} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={Customers} />} />
-      <Route path="/map" component={() => <ProtectedRoute component={MapView} />} />
       <Route path="/jobs" component={() => <ProtectedRoute component={Jobs} />} />
       <Route component={NotFound} />
     </Switch>
