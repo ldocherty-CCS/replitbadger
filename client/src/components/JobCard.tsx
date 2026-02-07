@@ -18,6 +18,8 @@ interface JobCardProps {
   job: Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator };
   isOverlay?: boolean;
   compact?: boolean;
+  jobIndex?: number;
+  totalJobs?: number;
   onDuplicate?: (job: Job) => void;
   onDelete?: (job: Job) => void;
   onStatusChange?: (job: Job, status: string) => void;
@@ -61,7 +63,7 @@ const statusDots: Record<string, string> = {
   standby: "bg-[hsl(270,60%,55%)]",
 };
 
-export function JobCard({ job, isOverlay, compact, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
+export function JobCard({ job, isOverlay, compact, jobIndex, totalJobs, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `job-${job.id}`,
     data: { 
@@ -91,6 +93,9 @@ export function JobCard({ job, isOverlay, compact, onDuplicate, onDelete, onStat
     )}>
       <CardContent className="p-1.5 space-y-0.5">
         <h4 className="font-bold text-xs leading-tight line-clamp-1" data-testid={`text-customer-${job.id}`}>
+          {totalJobs && totalJobs > 1 && jobIndex != null && (
+            <span className="mr-1 font-black opacity-80" data-testid={`text-job-order-${job.id}`}>{jobIndex + 1}.</span>
+          )}
           {job.customer?.name || "Unknown Customer"}
         </h4>
 

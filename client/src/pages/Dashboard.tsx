@@ -147,10 +147,15 @@ function DayCell({
         onContextMenu={handleContextMenu}
         data-testid={`cell-${operatorId}-${date}`}
       >
-        {jobs.map((job) => (
+        {jobs
+          .slice()
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          .map((job, idx) => (
           <div key={job.id} onClick={(e) => { e.stopPropagation(); onJobClick(job); }}>
             <JobCard
               job={job}
+              jobIndex={idx}
+              totalJobs={jobs.length}
               onDuplicate={onDuplicate}
               onDelete={onDelete}
               onStatusChange={onStatusChange}
@@ -313,10 +318,14 @@ export default function Dashboard() {
 
     const { operatorId, date: dateStr } = dropData;
     if (job.operatorId !== operatorId || job.scheduledDate !== dateStr) {
+      const targetKey = `${operatorId}-${dateStr}`;
+      const existingJobs = jobsMap[targetKey] || [];
+      const maxSort = existingJobs.reduce((max: number, j: Job) => Math.max(max, j.sortOrder ?? 0), 0);
       await updateJob.mutateAsync({
         id: job.id,
         operatorId,
         scheduledDate: dateStr,
+        sortOrder: maxSort + 1,
       });
     }
   };
@@ -527,6 +536,7 @@ export default function Dashboard() {
     if (!jobsMap[key]) jobsMap[key] = [];
     jobsMap[key].push(job);
   });
+  Object.values(jobsMap).forEach(arr => arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)));
 
   const jobsWithCoords = jobs?.filter((j: any) => j.lat != null && j.lng != null).length || 0;
   const truckMarkers = operators?.filter((op: any) => op.truckLat != null && op.truckLng != null).length || 0;
