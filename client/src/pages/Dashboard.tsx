@@ -521,25 +521,43 @@ export default function Dashboard() {
 
             <ScrollArea className="flex-1 custom-scrollbar">
               <div className="min-w-fit">
-                {operators?.map((operator) => (
-                  <div key={operator.id} className="flex border-b last:border-b-0">
-                    <div className="w-48 shrink-0 p-3 border-r bg-card sticky left-0 z-10 flex flex-col justify-center group hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-2 h-8 rounded-full shrink-0" 
-                          style={{ backgroundColor: operator.color || '#3b82f6' }} 
-                        />
-                        <div>
-                          <div className="font-bold text-sm leading-tight">{operator.name}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {operator.groupName}
-                            {operator.isOutOfState && (
-                              <span className="ml-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">OOS</span>
-                            )}
+                {(() => {
+                  let lastGroup = "";
+                  return operators?.map((operator) => {
+                    const showGroupHeader = operator.groupName !== lastGroup;
+                    lastGroup = operator.groupName;
+                    return (
+                      <div key={operator.id}>
+                        {showGroupHeader && (
+                          <div className="flex border-b bg-muted/40">
+                            <div className="w-48 shrink-0 px-3 py-1.5 border-r sticky left-0 z-10 bg-muted/40">
+                              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{operator.groupName}</span>
+                            </div>
+                            {weekDays.map((day) => (
+                              <div key={day.iso} className="flex-1 min-w-[140px] border-r last:border-r-0" />
+                            ))}
                           </div>
-                        </div>
-                      </div>
-                    </div>
+                        )}
+                        <div className="flex border-b last:border-b-0">
+                          <div className="w-48 shrink-0 px-3 py-2.5 border-r bg-card sticky left-0 z-10 flex flex-col justify-center group hover:bg-muted/50 transition-colors">
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-2 h-10 rounded-full shrink-0" 
+                                style={{ backgroundColor: operator.color || '#3b82f6' }} 
+                              />
+                              <div className="min-w-0">
+                                <div className="font-bold text-sm leading-tight truncate">{operator.name}</div>
+                                {operator.phone && (
+                                  <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{operator.phone}</div>
+                                )}
+                                {operator.isOutOfState && (
+                                  <div className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 mt-0.5">
+                                    OOS — {operator.groupName}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
 
                     {weekDays.map((day) => {
                       const key = `${operator.id}-${day.iso}`;
@@ -560,8 +578,11 @@ export default function Dashboard() {
                         </div>
                       );
                     })}
-                  </div>
-                ))}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
