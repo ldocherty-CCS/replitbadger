@@ -123,6 +123,14 @@ export default function Operators() {
                     <div className="font-medium text-right truncate">
                       {op.isOutOfState ? "Near prev. job" : (op.truckLocation || "N/A")}
                     </div>
+                    {op.isOutOfState && (op.availableFrom || op.availableTo) && (
+                      <>
+                        <div className="text-muted-foreground">Available:</div>
+                        <div className="font-medium text-right text-xs">
+                          {op.availableFrom || "?"} — {op.availableTo || "?"}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="pt-2">
@@ -281,16 +289,22 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
   const [selectedQuals, setSelectedQuals] = useState<string[]>([]);
   const [isOutOfState, setIsOutOfState] = useState(false);
   const [operatorType, setOperatorType] = useState<string>("operator");
+  const [availableFrom, setAvailableFrom] = useState("");
+  const [availableTo, setAvailableTo] = useState("");
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && initialData) {
       setSelectedQuals(initialData.qualifications || []);
       setIsOutOfState(initialData.isOutOfState || false);
       setOperatorType(initialData.operatorType || "operator");
+      setAvailableFrom(initialData.availableFrom || "");
+      setAvailableTo(initialData.availableTo || "");
     } else if (isOpen) {
       setSelectedQuals([]);
       setIsOutOfState(false);
       setOperatorType("operator");
+      setAvailableFrom("");
+      setAvailableTo("");
     }
     onOpenChange(isOpen);
   };
@@ -306,6 +320,8 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
       operatorType,
       qualifications: selectedQuals,
       isOutOfState,
+      availableFrom: isOutOfState && availableFrom ? availableFrom : null,
+      availableTo: isOutOfState && availableTo ? availableTo : null,
     };
 
     try {
@@ -355,17 +371,43 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
             <Label htmlFor="truckLocation">Truck Park Location</Label>
             <Input id="truckLocation" name="truckLocation" defaultValue={initialData?.truckLocation} data-testid="input-operator-truck" />
           </div>
-          <div className="flex items-start gap-3 rounded-md border p-3">
-            <Checkbox
-              id="isOutOfState"
-              checked={isOutOfState}
-              onCheckedChange={(v) => setIsOutOfState(v === true)}
-              data-testid="checkbox-out-of-state"
-            />
-            <div className="space-y-0.5">
-              <Label htmlFor="isOutOfState" className="font-medium cursor-pointer">Out of State</Label>
-              <p className="text-xs text-muted-foreground">Truck location will be assumed near the previous day's job site</p>
+          <div className="rounded-md border p-3 space-y-3">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="isOutOfState"
+                checked={isOutOfState}
+                onCheckedChange={(v) => setIsOutOfState(v === true)}
+                data-testid="checkbox-out-of-state"
+              />
+              <div className="space-y-0.5">
+                <Label htmlFor="isOutOfState" className="font-medium cursor-pointer">Out of State</Label>
+                <p className="text-xs text-muted-foreground">Truck location will be assumed near the previous day's job site</p>
+              </div>
             </div>
+            {isOutOfState && (
+              <div className="grid grid-cols-2 gap-3 pl-7">
+                <div className="space-y-1">
+                  <Label className="text-xs">Here From</Label>
+                  <Input
+                    type="date"
+                    value={availableFrom}
+                    onChange={(e) => setAvailableFrom(e.target.value)}
+                    data-testid="input-available-from"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Here Until</Label>
+                  <Input
+                    type="date"
+                    value={availableTo}
+                    onChange={(e) => setAvailableTo(e.target.value)}
+                    min={availableFrom || undefined}
+                    data-testid="input-available-to"
+                  />
+                </div>
+                <p className="col-span-2 text-xs text-muted-foreground">Set the dates this operator will be available. Days outside this range won't count as an available truck.</p>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Certifications / OQs</Label>

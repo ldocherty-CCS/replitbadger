@@ -568,6 +568,20 @@ export default function Dashboard() {
     }
   });
 
+  operators?.forEach((op) => {
+    if (op.isOutOfState && (op.availableFrom || op.availableTo)) {
+      weekDays.forEach((day) => {
+        const dayStr = day.iso;
+        if (op.availableFrom && dayStr < op.availableFrom) {
+          operatorOffDays.add(`${op.id}-${dayStr}`);
+        }
+        if (op.availableTo && dayStr > op.availableTo) {
+          operatorOffDays.add(`${op.id}-${dayStr}`);
+        }
+      });
+    }
+  });
+
   const jobsWithCoords = jobs?.filter((j: any) => j.lat != null && j.lng != null).length || 0;
   const truckMarkers = operators?.filter((op: any) => op.truckLat != null && op.truckLng != null).length || 0;
 

@@ -90,6 +90,24 @@ Jobs use a color-coded status system critical for visual hierarchy:
 ### Operator Truck Locations
 Operators have `truckLat` and `truckLng` fields for mapping their truck parking location on the dashboard map.
 
+### Out-of-State Operator Availability
+- Out-of-state operators (`isOutOfState=true`) have optional `availableFrom` and `availableTo` text date fields (YYYY-MM-DD format)
+- These define the window when the operator is working with us
+- Days outside this window are treated as OFF on the schedule board (red background, "OFF" label, truck not counted in availability)
+- The operator form shows "Here From" / "Here Until" date pickers when "Out of State" is checked
+- Availability integrates with the same `operatorOffDays` Set used by the time-off system
+
+### Operator Time Off
+- `operator_time_off` table stores date ranges (startDate, endDate) with operator reference and optional reason
+- Time Off button in dashboard header opens management dialog
+- Days marked as time-off show red background with "OFF" label on schedule board
+- AvailabilityChart shows effective truck count (total trucks minus operators off/unavailable)
+
+### Multi-Day Jobs
+- Jobs can be created spanning multiple days via "Multi-day job" checkbox in CreateJobDialog
+- Creates separate job records per day linked by `seriesId` field (format: `series-{timestamp}-{random}`)
+- Uses dedicated `/api/jobs/series` endpoint for batch creation
+
 ## External Dependencies
 
 ### Required Services
