@@ -141,26 +141,19 @@ function AvailabilityChart({
     const available = Math.max(0, totalTrucks - booked);
     const overbooked = dayJobs.length > totalTrucks;
     const overbookedCount = dayJobs.length - totalTrucks;
-    return { ...day, booked, available, overbooked, overbookedCount, totalJobs: dayJobs.length };
+    return { ...day, booked, available, overbooked, overbookedCount };
   });
-
-  const maxJobs = Math.max(totalTrucks, ...dayStats.map((d) => d.totalJobs), 1);
 
   return (
     <div className="border-t bg-card px-4 py-3" data-testid="availability-chart">
-      <div className="flex items-center gap-2 mb-2">
-        <Truck className="w-4 h-4 text-primary" />
-        <span className="text-sm font-semibold">Truck Availability</span>
-        <span className="text-xs text-muted-foreground">({totalTrucks} total trucks)</span>
-      </div>
-      <div className="flex gap-2 items-end h-20">
+      <div className="flex gap-2 items-end h-16">
         {dayStats.map((day) => {
-          const barHeight = Math.max(8, (day.totalJobs / maxJobs) * 100);
-          const capacityLine = (totalTrucks / maxJobs) * 100;
+          const availableRatio = totalTrucks > 0 ? day.available / totalTrucks : 0;
+          const barHeight = day.overbooked ? 100 : Math.max(6, availableRatio * 100);
 
           return (
             <div key={day.iso} className="flex-1 flex flex-col items-center gap-1" data-testid={`availability-day-${day.iso}`}>
-              <div className="relative w-full flex flex-col items-center" style={{ height: "64px" }}>
+              <div className="relative w-full flex flex-col items-center" style={{ height: "48px" }}>
                 <div
                   className="absolute bottom-0 w-full max-w-[48px] rounded-md transition-all duration-300"
                   style={{
@@ -169,19 +162,13 @@ function AvailabilityChart({
                       ? "hsl(0, 84%, 60%)"
                       : day.available === 0
                         ? "hsl(40, 96%, 50%)"
-                        : "hsl(var(--primary))",
-                    opacity: day.overbooked ? 1 : 0.8,
+                        : "hsl(142, 71%, 45%)",
+                    opacity: day.overbooked ? 1 : 0.85,
                   }}
                   data-testid={`bar-${day.iso}`}
                 />
-                {totalTrucks > 0 && (
-                  <div
-                    className="absolute w-full border-t-2 border-dashed border-muted-foreground/40"
-                    style={{ bottom: `${capacityLine}%` }}
-                  />
-                )}
               </div>
-              <div className="text-center mt-1">
+              <div className="text-center mt-0.5">
                 <div className={cn(
                   "text-xs font-bold leading-tight",
                   day.overbooked ? "text-destructive" : day.available === 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
@@ -189,10 +176,10 @@ function AvailabilityChart({
                   {day.overbooked ? (
                     <span>{day.overbookedCount} over</span>
                   ) : (
-                    <span>{day.available} free</span>
+                    <span>{day.available}/{totalTrucks}</span>
                   )}
                 </div>
-                <div className="text-[10px] text-muted-foreground leading-tight">
+                <div className="text-sm text-muted-foreground leading-tight font-medium">
                   {format(day.date, "EEE")}
                 </div>
               </div>
