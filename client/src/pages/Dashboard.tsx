@@ -91,6 +91,7 @@ function DayCell({
   date, 
   operatorId, 
   jobs, 
+  locationGroupMap,
   onJobClick,
   onDuplicate,
   onDelete,
@@ -105,6 +106,7 @@ function DayCell({
   date: string, 
   operatorId: number, 
   jobs: Job[], 
+  locationGroupMap: Record<number, { index: number; total: number }>,
   onJobClick: (job: Job) => void,
   onDuplicate: (job: Job) => void,
   onDelete: (job: Job) => void,
@@ -170,6 +172,8 @@ function DayCell({
               job={job}
               jobIndex={idx}
               totalJobs={jobs.length}
+              sameLocationIndex={locationGroupMap[job.id]?.index}
+              sameLocationTotal={locationGroupMap[job.id]?.total}
               onDuplicate={onDuplicate}
               onDelete={onDelete}
               onStatusChange={onStatusChange}
@@ -605,6 +609,24 @@ export default function Dashboard() {
   });
   Object.values(jobsMap).forEach(arr => arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)));
 
+  const locationGroupMap: Record<number, { index: number; total: number }> = {};
+  if (jobs) {
+    const byDateAddr: Record<string, Job[]> = {};
+    for (const job of jobs) {
+      if (job.status === "cancelled" || !job.address) continue;
+      const key = `${job.scheduledDate}::${job.address.trim().toLowerCase()}`;
+      if (!byDateAddr[key]) byDateAddr[key] = [];
+      byDateAddr[key].push(job);
+    }
+    for (const group of Object.values(byDateAddr)) {
+      if (group.length > 1) {
+        group.forEach((job, idx) => {
+          locationGroupMap[job.id] = { index: idx, total: group.length };
+        });
+      }
+    }
+  }
+
   const operatorOffDays = new Set<string>();
   timeOffRecords?.forEach((record) => {
     const start = new Date(record.startDate);
@@ -766,6 +788,7 @@ export default function Dashboard() {
                             date={day.iso} 
                             operatorId={operator.id} 
                             jobs={cellJobs}
+                            locationGroupMap={locationGroupMap}
                             onJobClick={(job) => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
@@ -820,6 +843,8 @@ export default function Dashboard() {
                             <div key={job.id} onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
                               <JobCard
                                 job={job}
+                                sameLocationIndex={locationGroupMap[job.id]?.index}
+                                sameLocationTotal={locationGroupMap[job.id]?.total}
                                 onDuplicate={handleDuplicate}
                                 onDelete={handleDelete}
                                 onStatusChange={handleStatusChange}

@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
-import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users } from "lucide-react";
+import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users, Truck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -20,6 +20,8 @@ interface JobCardProps {
   compact?: boolean;
   jobIndex?: number;
   totalJobs?: number;
+  sameLocationIndex?: number;
+  sameLocationTotal?: number;
   onDuplicate?: (job: Job) => void;
   onDelete?: (job: Job) => void;
   onStatusChange?: (job: Job, status: string) => void;
@@ -63,7 +65,7 @@ const statusDots: Record<string, string> = {
   standby: "bg-[hsl(270,60%,55%)]",
 };
 
-export function JobCard({ job, isOverlay, compact, jobIndex, totalJobs, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
+export function JobCard({ job, isOverlay, compact, jobIndex, totalJobs, sameLocationIndex, sameLocationTotal, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `job-${job.id}`,
     data: { 
@@ -102,6 +104,16 @@ export function JobCard({ job, isOverlay, compact, jobIndex, totalJobs, onDuplic
         <div className="flex items-center gap-1 text-[11px] opacity-90">
           <MapPin className="w-3 h-3 shrink-0" />
           <span className="line-clamp-1">{job.address}</span>
+          {sameLocationTotal && sameLocationTotal > 1 && sameLocationIndex != null && (
+            <span
+              className="shrink-0 inline-flex items-center gap-0.5 text-[9px] font-bold bg-white/25 rounded px-1 py-0.5"
+              title={`${sameLocationTotal} trucks at this location`}
+              data-testid={`badge-location-count-${job.id}`}
+            >
+              <Truck className="w-2.5 h-2.5" />
+              {sameLocationIndex + 1}/{sameLocationTotal}
+            </span>
+          )}
         </div>
 
         <div className="flex justify-between items-center">
