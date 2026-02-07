@@ -66,7 +66,16 @@ Preferred communication style: Simple, everyday language.
 Jobs use a color-coded status system critical for visual hierarchy:
 - `dispatched` (green), `unavailable` (red), `ready` (blue), `ticket_created` (sky blue), `existing` (gray), `missing_info` (pink), `not_qualified` (orange), `cancelled` (gray), `standby` (purple)
 
-### Dashboard Features
+### Mobile View
+- **Responsive Detection**: Screens under 768px width automatically show simplified mobile calendar view
+- **Week Navigation**: Previous/next week buttons with month/year label; tap month to jump to current week
+- **Day Headers**: Single-letter day names (S M T W T F S) with day numbers; today highlighted with primary circle
+- **Capacity Chart**: Per-day availability bars showing available/effective truck ratio (green=available, amber=full, red=overbooked)
+- **Schedule Grid**: Compact operator-by-day grid with truncated operator names, status-colored job cells showing customer names
+- **Off-Day Display**: Days off shown with red background and "OFF" label
+- **Component**: `MobileCalendarView` in `client/src/components/MobileCalendarView.tsx`
+
+### Dashboard Features (Desktop)
 - **Schedule Board**: Weekly grid of operators x days with drag-and-drop job assignment
 - **Collapsible Map Panel**: Embedded Leaflet map on the right side of dashboard showing:
   - **Date Filter**: Day-by-day navigation in map header (defaults to tomorrow). Only jobs for the selected date appear on the map.

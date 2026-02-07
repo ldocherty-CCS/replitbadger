@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfWeek, endOfWeek, parseISO } from "date-fns";
+import { MobileCalendarView } from "@/components/MobileCalendarView";
 import {
   DndContext,
   DragOverlay,
@@ -279,7 +280,33 @@ function AvailabilityChart({
   );
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < breakpoint : false
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    setIsMobile(mql.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 export default function Dashboard() {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return <MobileCalendarView />;
+  }
+
+  return <DesktopDashboard />;
+}
+
+function DesktopDashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -296,7 +323,7 @@ export default function Dashboard() {
   const [mapDate, setMapDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   const updateJob = useUpdateJob();
   const deleteJob = useDeleteJob();
   const duplicateJob = useDuplicateJob();
