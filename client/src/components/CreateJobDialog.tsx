@@ -175,6 +175,7 @@ export function CreateJobDialog({
                         <SelectItem value="unavailable">Unavailable</SelectItem>
                         <SelectItem value="ticket_created">Ticket Created</SelectItem>
                         <SelectItem value="not_qualified">Not Qualified</SelectItem>
+                        <SelectItem value="standby">Standby (2nd Job)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

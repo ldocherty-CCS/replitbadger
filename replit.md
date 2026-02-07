@@ -64,7 +64,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Job Status System
 Jobs use a color-coded status system critical for visual hierarchy:
-- `dispatched` (green), `unavailable` (red), `ready` (blue), `ticket_created` (sky blue), `existing` (gray), `missing_info` (pink), `not_qualified` (orange)
+- `dispatched` (green), `unavailable` (red), `ready` (blue), `ticket_created` (sky blue), `existing` (gray), `missing_info` (pink), `not_qualified` (orange), `cancelled` (gray), `standby` (purple)
 
 ### Dashboard Features
 - **Schedule Board**: Weekly grid of operators x days with drag-and-drop job assignment
@@ -73,8 +73,12 @@ Jobs use a color-coded status system critical for visual hierarchy:
   - Operator truck parking locations as square markers with truck icons (color = operator color)
 - **Right-Click Context Menu** on job cards:
   - Duplicate Job
-  - Change Status (submenu with all 7 status options)
+  - Change Status (submenu with status options, excluding cancelled/standby)
+  - Cancel Job (moves to cancelled bucket)
+  - Restore Job (on cancelled jobs, restores to Ready status)
   - Delete Job
+- **Cancelled Jobs Bucket**: Collapsible row at bottom of schedule board showing cancelled jobs per day with truck count badges. Expand to see/restore individual cancelled jobs.
+- **2nd Jobs / Standby**: Collapsible row for potential backup jobs (status="standby"). When an operator finishes early, standby jobs can be moved to the main board via status change or drag-and-drop.
 
 ### OQ Tracker Dashboard
 - **Summary Cards**: Active OQs, Expiring Soon (30-day window), Expired, Not on File counts

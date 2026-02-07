@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
-import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert } from "lucide-react";
+import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -17,9 +17,12 @@ import {
 interface JobCardProps {
   job: Job & { customer?: Customer; operator?: Operator };
   isOverlay?: boolean;
+  compact?: boolean;
   onDuplicate?: (job: Job) => void;
   onDelete?: (job: Job) => void;
   onStatusChange?: (job: Job, status: string) => void;
+  onCancel?: (job: Job) => void;
+  onRestore?: (job: Job) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -30,6 +33,8 @@ const statusColors: Record<string, string> = {
   existing: "bg-[hsl(220,9%,46%)] border-[hsl(220,9%,46%)] text-white",
   missing_info: "bg-[hsl(330,81%,60%)] border-[hsl(330,81%,60%)] text-white",
   not_qualified: "bg-[hsl(24,94%,50%)] border-[hsl(24,94%,50%)] text-white",
+  cancelled: "bg-[hsl(0,0%,55%)] border-[hsl(0,0%,55%)] text-white",
+  standby: "bg-[hsl(270,60%,55%)] border-[hsl(270,60%,55%)] text-white",
 };
 
 const statusLabels: Record<string, string> = {
@@ -40,6 +45,8 @@ const statusLabels: Record<string, string> = {
   existing: "Existing",
   missing_info: "Missing Info",
   not_qualified: "Not Qualified",
+  cancelled: "Cancelled",
+  standby: "Standby",
 };
 
 const statusDots: Record<string, string> = {
@@ -50,9 +57,11 @@ const statusDots: Record<string, string> = {
   existing: "bg-[hsl(220,9%,46%)]",
   missing_info: "bg-[hsl(330,81%,60%)]",
   not_qualified: "bg-[hsl(24,94%,50%)]",
+  cancelled: "bg-[hsl(0,0%,55%)]",
+  standby: "bg-[hsl(270,60%,55%)]",
 };
 
-export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange }: JobCardProps) {
+export function JobCard({ job, isOverlay, compact, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `job-${job.id}`,
     data: { 
@@ -66,7 +75,7 @@ export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange 
   } : undefined;
 
   const statusColorClass = statusColors[job.status] || "bg-gray-400 border-gray-400 text-white";
-  const hasContextMenu = !isOverlay && (onDuplicate || onDelete || onStatusChange);
+  const hasContextMenu = !isOverlay && (onDuplicate || onDelete || onStatusChange || onCancel || onRestore);
 
   const missingQuals = (() => {
     const required: string[] = (job.customer as any)?.requiredQuals || [];
@@ -161,7 +170,9 @@ export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange 
                 Change Status
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="w-48" data-testid="submenu-status-options">
-                {Object.entries(statusLabels).map(([key, label]) => (
+                {Object.entries(statusLabels)
+                  .filter(([key]) => key !== "cancelled" && key !== "standby")
+                  .map(([key, label]) => (
                   <ContextMenuItem
                     key={key}
                     onClick={() => onStatusChange(job, key)}
@@ -175,6 +186,27 @@ export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange 
                 ))}
               </ContextMenuSubContent>
             </ContextMenuSub>
+          )}
+          {onCancel && job.status !== "cancelled" && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onClick={() => onCancel(job)}
+                data-testid={`menu-cancel-job-${job.id}`}
+              >
+                <Ban className="w-4 h-4 mr-2" />
+                Cancel Job
+              </ContextMenuItem>
+            </>
+          )}
+          {onRestore && job.status === "cancelled" && (
+            <ContextMenuItem
+              onClick={() => onRestore(job)}
+              data-testid={`menu-restore-job-${job.id}`}
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Restore Job
+            </ContextMenuItem>
           )}
           {onDelete && (
             <>

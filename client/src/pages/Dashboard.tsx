@@ -18,7 +18,8 @@ import { useJobs, useUpdateJob, useDeleteJob, useDuplicateJob } from "@/hooks/us
 import { useOperators } from "@/hooks/use-operators";
 import { JobCard } from "@/components/JobCard";
 import { CreateJobDialog } from "@/components/CreateJobDialog";
-import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getOperatorColor } from "@/lib/operator-colors";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -35,6 +36,8 @@ const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   existing: { hex: "#9ca3af", label: "Existing" },
   missing_info: { hex: "#f472b6", label: "Missing Info" },
   not_qualified: { hex: "#fb923c", label: "Not Qualified" },
+  cancelled: { hex: "#8b8b8b", label: "Cancelled" },
+  standby: { hex: "#8b5cf6", label: "Standby" },
 };
 
 const DEFAULT_CENTER: [number, number] = [43.0389, -87.9065];
@@ -86,6 +89,8 @@ function DayCell({
   onDuplicate,
   onDelete,
   onStatusChange,
+  onCancel,
+  onRestore,
   onCellClick,
   isEvenRow,
 }: { 
@@ -96,6 +101,8 @@ function DayCell({
   onDuplicate: (job: Job) => void,
   onDelete: (job: Job) => void,
   onStatusChange: (job: Job, status: string) => void,
+  onCancel: (job: Job) => void,
+  onRestore: (job: Job) => void,
   onCellClick: (date: string, operatorId: number) => void,
   isEvenRow?: boolean,
 }) {
@@ -121,6 +128,8 @@ function DayCell({
               onDuplicate={onDuplicate}
               onDelete={onDelete}
               onStatusChange={onStatusChange}
+              onCancel={onCancel}
+              onRestore={onRestore}
             />
           </div>
         ))}
@@ -206,6 +215,8 @@ export default function Dashboard() {
   const [activeDragJob, setActiveDragJob] = useState<Job | null>(null);
   const [mapVisible, setMapVisible] = useState(true);
   const [splitPercent, setSplitPercent] = useState(65);
+  const [cancelledExpanded, setCancelledExpanded] = useState(false);
+  const [standbyExpanded, setStandbyExpanded] = useState(true);
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -274,6 +285,16 @@ export default function Dashboard() {
   const handleStatusChange = useCallback((job: Job, status: string) => {
     updateJob.mutate({ id: job.id, status });
   }, [updateJob]);
+
+  const handleCancel = useCallback((job: Job) => {
+    updateJob.mutate({ id: job.id, status: "cancelled" });
+    toast({ title: "Job Cancelled", description: `${(job as any).customer?.name || "Job"} has been cancelled` });
+  }, [updateJob, toast]);
+
+  const handleRestore = useCallback((job: Job) => {
+    updateJob.mutate({ id: job.id, status: "ready" });
+    toast({ title: "Job Restored", description: `${(job as any).customer?.name || "Job"} has been restored to the board as Ready` });
+  }, [updateJob, toast]);
 
   const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -435,7 +456,21 @@ export default function Dashboard() {
   }
 
   const jobsMap: Record<string, Job[]> = {};
+  const cancelledByDay: Record<string, Job[]> = {};
+  const standbyByDay: Record<string, Job[]> = {};
   jobs?.forEach(job => {
+    if (job.status === "cancelled") {
+      const dayKey = job.scheduledDate;
+      if (!cancelledByDay[dayKey]) cancelledByDay[dayKey] = [];
+      cancelledByDay[dayKey].push(job);
+      return;
+    }
+    if (job.status === "standby") {
+      const dayKey = job.scheduledDate;
+      if (!standbyByDay[dayKey]) standbyByDay[dayKey] = [];
+      standbyByDay[dayKey].push(job);
+      return;
+    }
     if (!job.operatorId) return;
     const key = `${job.operatorId}-${job.scheduledDate}`;
     if (!jobsMap[key]) jobsMap[key] = [];
@@ -573,6 +608,8 @@ export default function Dashboard() {
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                             onStatusChange={handleStatusChange}
+                            onCancel={handleCancel}
+                            onRestore={handleRestore}
                             onCellClick={(date, opId) => { setSelectedJob(null); setDefaultDate(date); setDefaultOperatorId(opId); setIsCreateOpen(true); }}
                             isEvenRow={isEven}
                           />
@@ -584,6 +621,97 @@ export default function Dashboard() {
                     );
                   });
                 })()}
+
+                {/* Standby / 2nd Jobs Row */}
+                <div className="flex border-b bg-purple-50/50 dark:bg-purple-950/20">
+                  <div 
+                    className="w-48 shrink-0 px-3 py-2 border-r sticky left-0 z-10 bg-purple-50/50 dark:bg-purple-950/20 cursor-pointer"
+                    onClick={() => setStandbyExpanded(!standbyExpanded)}
+                    data-testid="button-toggle-standby"
+                  >
+                    <div className="flex items-center gap-2">
+                      {standbyExpanded ? <ChevronUp className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />}
+                      <Clock3 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <div>
+                        <div className="text-xs font-bold text-purple-700 dark:text-purple-300">2nd Jobs / Standby</div>
+                        <div className="text-[10px] text-purple-600/70 dark:text-purple-400/70">
+                          {weekDays.reduce((sum, day) => sum + (standbyByDay[day.iso]?.length || 0), 0)} total
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {weekDays.map((day) => {
+                    const dayStandby = standbyByDay[day.iso] || [];
+                    return (
+                      <div key={day.iso} className="flex-1 min-w-[140px] p-1.5 border-r last:border-r-0" data-testid={`standby-cell-${day.iso}`}>
+                        {standbyExpanded && dayStandby.map((job) => (
+                          <div key={job.id} onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
+                            <JobCard
+                              job={job}
+                              onDuplicate={handleDuplicate}
+                              onDelete={handleDelete}
+                              onStatusChange={handleStatusChange}
+                              onCancel={handleCancel}
+                              onRestore={handleRestore}
+                            />
+                          </div>
+                        ))}
+                        {!standbyExpanded && dayStandby.length > 0 && (
+                          <div className="text-center">
+                            <Badge variant="secondary" className="text-[10px]">{dayStandby.length} standby</Badge>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Cancelled Jobs Bucket */}
+                <div className="flex border-b bg-muted/60">
+                  <div 
+                    className="w-48 shrink-0 px-3 py-2 border-r sticky left-0 z-10 bg-muted/60 cursor-pointer"
+                    onClick={() => setCancelledExpanded(!cancelledExpanded)}
+                    data-testid="button-toggle-cancelled"
+                  >
+                    <div className="flex items-center gap-2">
+                      {cancelledExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+                      <Ban className="w-4 h-4 text-muted-foreground" />
+                      <div>
+                        <div className="text-xs font-bold text-muted-foreground">Cancelled</div>
+                        <div className="text-[10px] text-muted-foreground/70">
+                          {weekDays.reduce((sum, day) => sum + (cancelledByDay[day.iso]?.length || 0), 0)} total
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {weekDays.map((day) => {
+                    const dayCancelled = cancelledByDay[day.iso] || [];
+                    return (
+                      <div key={day.iso} className="flex-1 min-w-[140px] p-1.5 border-r last:border-r-0" data-testid={`cancelled-cell-${day.iso}`}>
+                        <div className="text-center mb-1">
+                          {dayCancelled.length > 0 && (
+                            <Badge variant="secondary" className="text-[10px]" data-testid={`badge-cancelled-count-${day.iso}`}>
+                              <Ban className="w-3 h-3 mr-1" />
+                              {dayCancelled.length} truck{dayCancelled.length !== 1 ? "s" : ""}
+                            </Badge>
+                          )}
+                        </div>
+                        {cancelledExpanded && dayCancelled.map((job) => (
+                          <div key={job.id} className="opacity-60" onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
+                            <JobCard
+                              job={job}
+                              onDuplicate={handleDuplicate}
+                              onDelete={handleDelete}
+                              onStatusChange={handleStatusChange}
+                              onCancel={handleCancel}
+                              onRestore={handleRestore}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
               <ScrollBar orientation="horizontal" />
             </ScrollArea>

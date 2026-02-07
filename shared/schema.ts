@@ -71,7 +71,7 @@ export const jobs = pgTable("jobs", {
   onSiteContact: text("on_site_contact"),
   
   // Status & Billing
-  status: text("status").notNull().default("missing_info"), // dispatched, ready, missing_info, etc.
+  status: text("status").notNull().default("missing_info"), // dispatched, ready, missing_info, cancelled, standby, etc.
   billingInfo: text("billing_info"),
   poNumber: text("po_number"),
   ticketCreated: boolean("ticket_created").default(false),
