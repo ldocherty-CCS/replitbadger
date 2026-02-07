@@ -64,14 +64,13 @@ function MobileDraggableJob({ job }: { job: Job & { customer?: { name: string } 
       {...listeners}
       {...attributes}
       className={cn(
-        "rounded-[3px] px-0.5 py-px leading-none overflow-hidden flex items-center gap-0.5 touch-none",
+        "rounded-[2px] px-1 py-0.5 leading-none overflow-hidden flex items-center touch-none w-full",
         isDragging && "opacity-40"
       )}
       style={{ background: bg, color: fg }}
       data-testid={`mobile-job-${job.id}`}
     >
-      <GripVertical className="w-2 h-2 shrink-0 opacity-60" />
-      <span className="text-[9px] font-semibold block truncate">
+      <span className="text-[8px] font-bold block truncate w-full text-center">
         {truncName}
       </span>
     </div>
@@ -110,7 +109,7 @@ function MobileDropCell({
       ref={setNodeRef}
       onClick={handleClick}
       className={cn(
-        "min-h-[36px] border-r last:border-r-0 p-0.5 flex flex-col gap-0.5 transition-colors",
+        "min-h-[22px] border-r last:border-r-0 px-px py-px flex flex-col gap-px transition-colors",
         isOff && "bg-red-100/60 dark:bg-red-950/30",
         isOver && "bg-primary/10 ring-1 ring-inset ring-primary/30",
         isEmpty && !isOff && "cursor-pointer"
@@ -335,21 +334,21 @@ export function MobileCalendarView() {
       onDragEnd={handleDragEnd}
     >
       <div className="flex flex-col h-[calc(100vh-4rem)] bg-background" data-testid="mobile-calendar-view">
-        <div className="flex items-center justify-between px-3 py-2 border-b bg-card shrink-0">
+        <div className="flex items-center justify-between px-2 py-1 border-b bg-card shrink-0">
           <Button variant="ghost" size="icon" onClick={prevWeek} data-testid="mobile-prev-week">
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-4 h-4" />
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={goToday}
-            className="text-sm font-semibold"
+            className="text-xs font-semibold"
             data-testid="mobile-today"
           >
             {format(startDate, "MMM yyyy")}
           </Button>
           <Button variant="ghost" size="icon" onClick={nextWeek} data-testid="mobile-next-week">
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
 
@@ -358,16 +357,16 @@ export function MobileCalendarView() {
             <div
               key={day.iso}
               className={cn(
-                "flex flex-col items-center py-1.5",
+                "flex flex-col items-center py-0.5",
                 day.iso === todayIso && "relative"
               )}
             >
-              <span className="text-[10px] font-medium text-muted-foreground uppercase">
+              <span className="text-[9px] font-medium text-muted-foreground uppercase">
                 {day.dayLetter}
               </span>
               <span
                 className={cn(
-                  "text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full",
+                  "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full",
                   day.iso === todayIso && "bg-primary text-primary-foreground"
                 )}
               >
@@ -387,10 +386,10 @@ export function MobileCalendarView() {
                 : "hsl(142, 71%, 45%)";
 
             return (
-              <div key={day.iso} className="flex flex-col items-center px-0.5 py-1.5">
-                <div className="relative w-full h-6 flex items-end justify-center">
+              <div key={day.iso} className="flex flex-col items-center px-0.5 py-1">
+                <div className="relative w-full h-4 flex items-end justify-center">
                   <div
-                    className="w-full max-w-[28px] rounded-sm transition-all duration-300"
+                    className="w-full max-w-[24px] rounded-sm transition-all duration-300"
                     style={{
                       height: `${day.overbooked ? 100 : Math.max(12, ratio * 100)}%`,
                       background: barColor,
@@ -400,7 +399,7 @@ export function MobileCalendarView() {
                 </div>
                 <span
                   className={cn(
-                    "text-[9px] font-bold mt-0.5 leading-tight",
+                    "text-[8px] font-bold mt-px leading-tight",
                     day.overbooked
                       ? "text-destructive"
                       : day.available === 0
@@ -420,11 +419,11 @@ export function MobileCalendarView() {
             {groupedOperators.map((group) => (
               <div key={group.name}>
                 <div
-                  className="sticky left-0 z-20 px-2 py-1 bg-muted border-b border-t"
+                  className="sticky left-0 z-20 px-1.5 py-px bg-muted border-b border-t"
                   style={{ gridColumn: "1 / -1" }}
                   data-testid={`mobile-group-${group.name}`}
                 >
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">
                     {group.name}
                   </span>
                 </div>
@@ -432,12 +431,12 @@ export function MobileCalendarView() {
                   <div
                     key={operator.id}
                     className="grid border-b last:border-b-0"
-                    style={{ gridTemplateColumns: "minmax(64px, auto) repeat(7, 1fr)" }}
+                    style={{ gridTemplateColumns: "minmax(52px, 56px) repeat(7, 1fr)" }}
                     data-testid={`mobile-row-${operator.id}`}
                   >
-                    <div className="px-1.5 py-1 flex items-center border-r bg-muted/30 sticky left-0 z-10">
-                      <span className="text-[11px] font-semibold leading-tight truncate">
-                        {operator.name.split(" ").map(n => n.slice(0, 6)).join(" ")}
+                    <div className="px-1 py-px flex items-center border-r bg-muted/30 sticky left-0 z-10">
+                      <span className="text-[9px] font-semibold leading-tight truncate">
+                        {operator.name.split(" ").map(n => n.slice(0, 5)).join(" ")}
                       </span>
                     </div>
                     {weekDays.map((day) => {
@@ -456,7 +455,7 @@ export function MobileCalendarView() {
                         >
                           {isOff && cellJobs.length === 0 && (
                             <div className="flex-1 flex items-center justify-center">
-                              <span className="text-[8px] font-bold text-red-400 uppercase">OFF</span>
+                              <span className="text-[7px] font-bold text-red-400 uppercase">OFF</span>
                             </div>
                           )}
                           {cellJobs.map((job) => (
