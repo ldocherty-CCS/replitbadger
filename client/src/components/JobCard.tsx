@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
-import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw } from "lucide-react";
+import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/context-menu";
 
 interface JobCardProps {
-  job: Job & { customer?: Customer; operator?: Operator };
+  job: Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator };
   isOverlay?: boolean;
   compact?: boolean;
   onDuplicate?: (job: Job) => void;
@@ -131,6 +131,21 @@ export function JobCard({ job, isOverlay, compact, onDuplicate, onDelete, onStat
             )}
           </div>
         </div>
+
+        {job.additionalOperatorNeeded && (
+          <div className="flex items-center gap-1 text-[10px]" data-testid={`assistant-info-${job.id}`}>
+            <Users className="w-3 h-3 shrink-0" />
+            {job.assistantOperator ? (
+              <span className="font-medium text-foreground/80 line-clamp-1" data-testid={`text-assistant-${job.id}`}>
+                + {job.assistantOperator.name}
+              </span>
+            ) : (
+              <span className="italic text-amber-500" data-testid={`text-needs-assistant-${job.id}`}>
+                Needs assistant
+              </span>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

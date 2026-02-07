@@ -143,6 +143,7 @@ export type UpdateJobRequest = Partial<InsertJob>;
 export type JobResponse = Job & { 
   customer?: Customer;
   operator?: Operator;
+  assistantOperator?: Operator;
 };
 
 export type LoginRequest = { username: string; password: string };

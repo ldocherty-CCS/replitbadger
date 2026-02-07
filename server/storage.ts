@@ -6,7 +6,7 @@ import {
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
   type OperatorQualificationWithDetails
 } from "@shared/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, aliasedTable } from "drizzle-orm";
 
 export interface IStorage {
   // Operators
@@ -23,7 +23,7 @@ export interface IStorage {
   updateCustomer(id: number, updates: UpdateCustomerRequest): Promise<Customer>;
 
   // Jobs
-  getJobs(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(Job & { customer?: Customer; operator?: Operator })[]>;
+  getJobs(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator })[]>;
   getJob(id: number): Promise<Job | undefined>;
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: number, updates: UpdateJobRequest): Promise<Job>;
@@ -110,7 +110,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Jobs
-  async getJobs(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(Job & { customer?: Customer; operator?: Operator })[]> {
+  async getJobs(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator })[]> {
+    const assistantOperators = aliasedTable(operators, "assistant_operators");
     let query = db.select({
       id: jobs.id,
       customerId: jobs.customerId,
@@ -130,13 +131,16 @@ export class DatabaseStorage implements IStorage {
       manifestNeeded: jobs.manifestNeeded,
       siteQuals: jobs.siteQuals,
       additionalOperatorNeeded: jobs.additionalOperatorNeeded,
+      assistantOperatorId: jobs.assistantOperatorId,
       createdAt: jobs.createdAt,
       customer: customers,
       operator: operators,
+      assistantOperator: assistantOperators,
     })
     .from(jobs)
     .leftJoin(customers, eq(jobs.customerId, customers.id))
-    .leftJoin(operators, eq(jobs.operatorId, operators.id));
+    .leftJoin(operators, eq(jobs.operatorId, operators.id))
+    .leftJoin(assistantOperators, eq(jobs.assistantOperatorId, assistantOperators.id));
 
     const conditions = [];
     if (filters?.startDate) {
@@ -159,9 +163,9 @@ export class DatabaseStorage implements IStorage {
     
     return results.map(row => ({
       ...row,
-      // Map joined fields to nested objects if they exist
       customer: row.customer || undefined,
       operator: row.operator || undefined,
+      assistantOperator: row.assistantOperator || undefined,
     }));
   }
 

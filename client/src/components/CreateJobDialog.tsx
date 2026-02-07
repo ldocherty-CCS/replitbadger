@@ -29,14 +29,19 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck } from "lucide-react";
+import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 
 // Extend schema to handle string conversion for IDs
 const formSchema = insertJobSchema.extend({
   customerId: z.coerce.number(),
   operatorId: z.coerce.number().optional().nullable(),
+  assistantOperatorId: z.preprocess(
+    (val) => (val === "none" || val === "" || val === undefined || val === null ? null : Number(val)),
+    z.number().nullable().optional()
+  ),
   additionalOperatorNeeded: z.boolean().default(false),
   manifestNeeded: z.boolean().default(false),
 });
@@ -284,6 +289,68 @@ export function CreateJobDialog({
                 customers={customers} 
                 operators={operators} 
               />
+
+              {/* Additional Operator */}
+              <div className="col-span-1 md:col-span-2 space-y-3">
+                <FormField
+                  control={form.control}
+                  name="additionalOperatorNeeded"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            if (!checked) {
+                              form.setValue("assistantOperatorId", null);
+                            }
+                          }}
+                          data-testid="checkbox-additional-operator"
+                        />
+                      </FormControl>
+                      <FormLabel className="flex items-center gap-1.5 cursor-pointer">
+                        <Users className="w-4 h-4" />
+                        Additional operator needed
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch("additionalOperatorNeeded") && (
+                  <FormField
+                    control={form.control}
+                    name="assistantOperatorId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Assistant Operator</FormLabel>
+                        <Select
+                          onValueChange={(val) => field.onChange(val === "none" ? null : val)}
+                          value={field.value ? field.value.toString() : "none"}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-assistant-operator">
+                              <SelectValue placeholder="Select assistant" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Not assigned yet</SelectItem>
+                            {operators
+                              ?.filter((op) => op.id !== form.watch("operatorId"))
+                              .map((op) => (
+                                <SelectItem key={op.id} value={op.id.toString()}>
+                                  {op.name}
+                                  {op.operatorType === "local_assistant" ? " (Assistant)" : ""}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
 
               {/* Contact Info */}
               <FormField
