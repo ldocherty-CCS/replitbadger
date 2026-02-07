@@ -17,6 +17,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import badgerLogo from "@assets/Badger-Logo-2023-proposed_1770453144754.png";
 
 export function Navigation() {
   const [location] = useLocation();
@@ -37,12 +38,8 @@ export function Navigation() {
         <div className="flex h-16 justify-between items-center">
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2">
-              <div className="bg-primary p-2 rounded-lg">
-                <Truck className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <span className="font-display font-bold text-xl tracking-tight hidden sm:block">
-                BadgerDispatch
-              </span>
+              <img src={badgerLogo} alt="Badger" className="h-8 hidden sm:block" data-testid="img-badger-logo" />
+              <img src={badgerLogo} alt="Badger" className="h-6 sm:hidden" data-testid="img-badger-logo-mobile" />
             </Link>
 
             {/* Desktop Navigation */}

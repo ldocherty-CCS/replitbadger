@@ -1,9 +1,9 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck } from "lucide-react";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import badgerLogo from "@assets/Badger-Logo-2023-proposed_1770453144754.png";
 
 export default function Login() {
   const { user, isLoading } = useAuth();
@@ -26,11 +26,9 @@ export default function Login() {
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="space-y-3 text-center">
           <div className="flex justify-center mb-4">
-            <div className="bg-primary p-3 rounded-xl shadow-lg shadow-primary/30">
-              <Truck className="w-8 h-8 text-primary-foreground" />
-            </div>
+            <img src={badgerLogo} alt="Badger" className="h-12" data-testid="img-login-logo" />
           </div>
-          <CardTitle className="text-2xl font-display font-bold">BadgerDispatch</CardTitle>
+          <CardTitle className="text-2xl font-display font-bold">Dispatch</CardTitle>
           <CardDescription>
             Scheduling Management System
           </CardDescription>
