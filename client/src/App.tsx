@@ -12,6 +12,7 @@ import Dashboard from "@/pages/Dashboard";
 import Operators from "@/pages/Operators";
 import Customers from "@/pages/Customers";
 import Jobs from "@/pages/Jobs";
+import OQDashboard from "@/pages/OQDashboard";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/not-found";
 
@@ -54,6 +55,7 @@ function Router() {
       <Route path="/operators" component={() => <ProtectedRoute component={Operators} />} />
       <Route path="/customers" component={() => <ProtectedRoute component={Customers} />} />
       <Route path="/jobs" component={() => <ProtectedRoute component={Jobs} />} />
+      <Route path="/oq" component={() => <ProtectedRoute component={OQDashboard} />} />
       <Route component={NotFound} />
     </Switch>
   );

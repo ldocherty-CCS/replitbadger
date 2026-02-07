@@ -7,7 +7,8 @@ import {
   Truck, 
   LogOut, 
   Menu,
-  LayoutDashboard
+  LayoutDashboard,
+  ShieldCheck
 } from "lucide-react";
 import {
   Sheet,
@@ -28,6 +29,7 @@ export function Navigation() {
     { href: "/schedule", label: "Schedule Board", icon: CalendarDays },
     { href: "/operators", label: "Operators", icon: Truck },
     { href: "/customers", label: "Customers", icon: Users },
+    { href: "/oq", label: "OQ Tracker", icon: ShieldCheck },
   ];
 
   if (!user) return null;

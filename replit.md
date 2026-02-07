@@ -39,6 +39,7 @@ Preferred communication style: Simple, everyday language.
   - `operators` — Field operators with name, group, qualifications array, color, truck location
   - `customers` — Clients with contact info and required qualifications
   - `jobs` — Scheduled jobs linking customers and operators, with status, dates, times, addresses
+  - `operator_qualifications` — OQ tracking records linking operators to qualifications with issue/expiration dates, document info, status
   - `sessions` — PostgreSQL-backed session store (created by connect-pg-simple)
 
 ### Authentication & Authorization
@@ -74,6 +75,13 @@ Jobs use a color-coded status system critical for visual hierarchy:
   - Duplicate Job
   - Change Status (submenu with all 7 status options)
   - Delete Job
+
+### OQ Tracker Dashboard
+- **Summary Cards**: Active OQs, Expiring Soon (30-day window), Expired, Not on File counts
+- **Compliance Matrix**: Operator x Qualification grid showing status icons (green check = active, amber clock = expiring, red X = expired, dash = missing). Click any cell to add/edit. Progress bar per operator.
+- **Alerts Tab**: Sorted list of expired and expiring qualifications with urgency indicators
+- **All Records Tab**: Filterable/searchable table with edit/delete capabilities
+- **Add/Edit Dialog**: Create or update OQ records with operator, qualification, dates, document info, and notes
 
 ### Operator Truck Locations
 Operators have `truckLat` and `truckLng` fields for mapping their truck parking location on the dashboard map.
