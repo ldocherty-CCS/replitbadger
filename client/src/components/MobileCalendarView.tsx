@@ -47,9 +47,11 @@ function getContrastText(hex: string): string {
   return luminance > 0.5 ? "#000" : "#fff";
 }
 
-function MobileDraggableJob({ job }: { job: Job & { customer?: { name: string } } }) {
+function MobileDraggableJob({ job, isAssistantEntry }: { job: Job & { customer?: { name: string } }; isAssistantEntry?: boolean }) {
+  const draggableId = isAssistantEntry ? `mobile-job-${job.id}-assist` : `mobile-job-${job.id}`;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `mobile-job-${job.id}`,
+    id: draggableId,
+    disabled: isAssistantEntry,
     data: { job },
   });
 
@@ -65,13 +67,18 @@ function MobileDraggableJob({ job }: { job: Job & { customer?: { name: string } 
       {...attributes}
       className={cn(
         "rounded-[2px] px-1 py-0.5 leading-none overflow-hidden flex items-center touch-none w-full",
-        isDragging && "opacity-40"
+        isDragging && "opacity-40",
+        isAssistantEntry && "opacity-75"
       )}
-      style={{ background: bg, color: fg }}
-      data-testid={`mobile-job-${job.id}`}
+      style={{
+        background: bg,
+        color: fg,
+        ...(isAssistantEntry ? { border: `1px dashed ${fg}` } : {}),
+      }}
+      data-testid={`mobile-job-${job.id}${isAssistantEntry ? '-assist' : ''}`}
     >
       <span className="text-[8px] font-bold block truncate w-full text-center">
-        {truncName}
+        {isAssistantEntry ? `A: ${truncName}` : truncName}
       </span>
     </div>
   );
@@ -208,16 +215,23 @@ export function MobileCalendarView() {
     return offDays;
   }, [timeOffRecords, operators, weekDays]);
 
-  const jobsMap = useMemo(() => {
+  const { jobsMap, assistantJobIds } = useMemo(() => {
     const map: Record<string, Job[]> = {};
+    const assistIds = new Set<number>();
     jobs?.forEach((job) => {
       if (job.status === "cancelled" || job.status === "standby") return;
       if (!job.operatorId) return;
       const key = `${job.operatorId}-${job.scheduledDate}`;
       if (!map[key]) map[key] = [];
       map[key].push(job);
+      if ((job as any).assistantOperatorId) {
+        const assistKey = `${(job as any).assistantOperatorId}-${job.scheduledDate}`;
+        if (!map[assistKey]) map[assistKey] = [];
+        map[assistKey].push(job);
+        assistIds.add(job.id);
+      }
     });
-    return map;
+    return { jobsMap: map, assistantJobIds: assistIds };
   }, [jobs]);
 
   const dayStats = useMemo(() => {
@@ -458,9 +472,12 @@ export function MobileCalendarView() {
                               <span className="text-[7px] font-bold text-red-400 uppercase">OFF</span>
                             </div>
                           )}
-                          {cellJobs.map((job) => (
-                            <MobileDraggableJob key={job.id} job={job as any} />
-                          ))}
+                          {cellJobs.map((job) => {
+                            const isAssist = assistantJobIds.has(job.id) && (job as any).assistantOperatorId === operator.id;
+                            return (
+                              <MobileDraggableJob key={`${job.id}${isAssist ? '-a' : ''}`} job={job as any} isAssistantEntry={isAssist} />
+                            );
+                          })}
                         </MobileDropCell>
                       );
                     })}

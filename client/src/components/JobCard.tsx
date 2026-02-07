@@ -18,6 +18,7 @@ interface JobCardProps {
   job: Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator; creator?: { id: string; firstName: string | null; lastName: string | null } | null };
   isOverlay?: boolean;
   compact?: boolean;
+  isAssistantEntry?: boolean;
   jobIndex?: number;
   totalJobs?: number;
   sameLocationIndex?: number;
@@ -65,9 +66,11 @@ const statusDots: Record<string, string> = {
   standby: "bg-[hsl(270,60%,55%)]",
 };
 
-export function JobCard({ job, isOverlay, compact, jobIndex, totalJobs, sameLocationIndex, sameLocationTotal, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
+export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, totalJobs, sameLocationIndex, sameLocationTotal, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
+  const draggableId = isAssistantEntry ? `job-${job.id}-assist` : `job-${job.id}`;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `job-${job.id}`,
+    id: draggableId,
+    disabled: isAssistantEntry,
     data: { 
       type: "Job", 
       job 
@@ -91,9 +94,16 @@ export function JobCard({ job, isOverlay, compact, jobIndex, totalJobs, sameLoca
   const innerCard = (
     <Card className={cn(
       "overflow-hidden shadow-sm hover:shadow-md transition-shadow",
-      statusColorClass
+      statusColorClass,
+      isAssistantEntry && "opacity-80 border-dashed border-2"
     )}>
       <CardContent className="p-1.5 space-y-0.5">
+        {isAssistantEntry && (
+          <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide opacity-90 mb-0.5" data-testid={`badge-assisting-${job.id}`}>
+            <Users className="w-2.5 h-2.5" />
+            Assisting
+          </div>
+        )}
         <h4 className="font-bold text-xs leading-tight line-clamp-1" data-testid={`text-customer-${job.id}`}>
           {totalJobs && totalJobs > 1 && jobIndex != null && (
             <span className="mr-1 font-black opacity-80" data-testid={`text-job-order-${job.id}`}>{jobIndex + 1}.</span>

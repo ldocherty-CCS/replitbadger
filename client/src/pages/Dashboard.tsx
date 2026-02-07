@@ -93,6 +93,7 @@ function DayCell({
   operatorId, 
   jobs, 
   locationGroupMap,
+  assistantJobIds,
   onJobClick,
   onDuplicate,
   onDelete,
@@ -108,6 +109,7 @@ function DayCell({
   operatorId: number, 
   jobs: Job[], 
   locationGroupMap: Record<number, { index: number; total: number }>,
+  assistantJobIds: Set<number>,
   onJobClick: (job: Job) => void,
   onDuplicate: (job: Job) => void,
   onDelete: (job: Job) => void,
@@ -167,14 +169,17 @@ function DayCell({
         {jobs
           .slice()
           .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-          .map((job, idx) => (
-          <div key={job.id} onClick={(e) => { e.stopPropagation(); onJobClick(job); }}>
+          .map((job, idx) => {
+          const isAssist = assistantJobIds.has(job.id) && (job as any).assistantOperatorId === operatorId;
+          return (
+          <div key={`${job.id}${isAssist ? '-assist' : ''}`} onClick={(e) => { e.stopPropagation(); onJobClick(job); }}>
             <JobCard
               job={job}
               jobIndex={idx}
               totalJobs={jobs.length}
               sameLocationIndex={locationGroupMap[job.id]?.index}
               sameLocationTotal={locationGroupMap[job.id]?.total}
+              isAssistantEntry={isAssist}
               onDuplicate={onDuplicate}
               onDelete={onDelete}
               onStatusChange={onStatusChange}
@@ -182,7 +187,8 @@ function DayCell({
               onRestore={onRestore}
             />
           </div>
-        ))}
+          );
+        })}
       </div>
       {ctxMenu && (
         <div
@@ -486,7 +492,14 @@ function DesktopDashboard() {
     document.addEventListener("mouseup", handleMouseUp);
   }, []);
 
+  const mapObserver = useRef<ResizeObserver | null>(null);
+
   useEffect(() => {
+    if (mapObserver.current) {
+      mapObserver.current.disconnect();
+      mapObserver.current = null;
+    }
+
     if (!mapVisible) {
       if (leafletMap.current) {
         leafletMap.current.remove();
@@ -511,14 +524,27 @@ function DesktopDashboard() {
 
     markersLayer.current = L.layerGroup().addTo(leafletMap.current);
 
-    setTimeout(() => {
+    [100, 300, 600, 1200].forEach(delay => {
+      setTimeout(() => leafletMap.current?.invalidateSize(), delay);
+    });
+
+    mapObserver.current = new ResizeObserver(() => {
       leafletMap.current?.invalidateSize();
-    }, 200);
+    });
+    mapObserver.current.observe(mapRef.current);
+
+    return () => {
+      if (mapObserver.current) {
+        mapObserver.current.disconnect();
+        mapObserver.current = null;
+      }
+    };
   }, [mapVisible]);
 
   useEffect(() => {
     if (leafletMap.current) {
       setTimeout(() => leafletMap.current?.invalidateSize(), 50);
+      setTimeout(() => leafletMap.current?.invalidateSize(), 300);
     }
   }, [splitPercent]);
 
@@ -626,6 +652,7 @@ function DesktopDashboard() {
   const jobsMap: Record<string, Job[]> = {};
   const cancelledByDay: Record<string, Job[]> = {};
   const standbyByDay: Record<string, Job[]> = {};
+  const assistantJobIds = new Set<number>();
   jobs?.forEach(job => {
     if (job.status === "cancelled") {
       const dayKey = job.scheduledDate;
@@ -643,6 +670,12 @@ function DesktopDashboard() {
     const key = `${job.operatorId}-${job.scheduledDate}`;
     if (!jobsMap[key]) jobsMap[key] = [];
     jobsMap[key].push(job);
+    if ((job as any).assistantOperatorId) {
+      const assistKey = `${(job as any).assistantOperatorId}-${job.scheduledDate}`;
+      if (!jobsMap[assistKey]) jobsMap[assistKey] = [];
+      jobsMap[assistKey].push(job);
+      assistantJobIds.add(job.id);
+    }
   });
   Object.values(jobsMap).forEach(arr => arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)));
 
@@ -826,6 +859,7 @@ function DesktopDashboard() {
                             operatorId={operator.id} 
                             jobs={cellJobs}
                             locationGroupMap={locationGroupMap}
+                            assistantJobIds={assistantJobIds}
                             onJobClick={(job) => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
