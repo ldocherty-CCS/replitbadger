@@ -7,12 +7,13 @@ interface DroppableDayProps {
   operatorId: number;
   children: React.ReactNode;
   className?: string;
+  type?: "schedule" | "standby" | "cancelled";
 }
 
-export function DroppableDay({ id, date, operatorId, children, className }: DroppableDayProps) {
+export function DroppableDay({ id, date, operatorId, children, className, type = "schedule" }: DroppableDayProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: id,
-    data: { operatorId, date },
+    data: { operatorId, date, type },
   });
 
   return (

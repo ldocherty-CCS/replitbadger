@@ -11,6 +11,9 @@ import {
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
+  pointerWithin,
+  closestCenter,
+  type CollisionDetection,
 } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -319,6 +322,12 @@ export default function Dashboard() {
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } });
   const sensors = useSensors(pointerSensor, touchSensor);
 
+  const collisionStrategy: CollisionDetection = useCallback((args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) return pointerCollisions;
+    return closestCenter(args);
+  }, []);
+
   const prevWeek = () => setCurrentDate(addDays(currentDate, -7));
   const nextWeek = () => setCurrentDate(addDays(currentDate, 7));
   const today = () => setCurrentDate(new Date());
@@ -337,17 +346,54 @@ export default function Dashboard() {
     const dropData = over.data.current;
     if (!job || !dropData) return;
 
-    const { operatorId, date: dateStr } = dropData;
+    const { operatorId, date: dateStr, type } = dropData;
+    const dropType = type || "schedule";
+
+    if (dropType === "standby") {
+      if (job.status !== "standby") {
+        await updateJob.mutateAsync({
+          id: job.id,
+          status: "standby",
+          scheduledDate: dateStr,
+        });
+        toast({ title: "Moved to Standby", description: `${(job as any).customer?.name || "Job"} moved to standby` });
+      }
+      return;
+    }
+
+    if (dropType === "cancelled") {
+      if (job.status !== "cancelled") {
+        await updateJob.mutateAsync({
+          id: job.id,
+          status: "cancelled",
+          scheduledDate: dateStr,
+        });
+        toast({ title: "Job Cancelled", description: `${(job as any).customer?.name || "Job"} has been cancelled` });
+      }
+      return;
+    }
+
+    const updates: { id: number; operatorId?: number; scheduledDate?: string; sortOrder?: number; status?: string } = { id: job.id };
+    let changed = false;
+
     if (job.operatorId !== operatorId || job.scheduledDate !== dateStr) {
+      updates.operatorId = operatorId;
+      updates.scheduledDate = dateStr;
       const targetKey = `${operatorId}-${dateStr}`;
       const existingJobs = jobsMap[targetKey] || [];
       const maxSort = existingJobs.reduce((max: number, j: Job) => Math.max(max, j.sortOrder ?? 0), 0);
-      await updateJob.mutateAsync({
-        id: job.id,
-        operatorId,
-        scheduledDate: dateStr,
-        sortOrder: maxSort + 1,
-      });
+      updates.sortOrder = maxSort + 1;
+      changed = true;
+    }
+
+    if (job.status === "standby" || job.status === "cancelled") {
+      updates.status = "ready";
+      changed = true;
+      toast({ title: "Job Restored", description: `${(job as any).customer?.name || "Job"} restored to the board as Ready` });
+    }
+
+    if (changed) {
+      await updateJob.mutateAsync(updates);
     }
   };
 
@@ -636,6 +682,7 @@ export default function Dashboard() {
 
       <DndContext 
         sensors={sensors} 
+        collisionDetection={collisionStrategy}
         onDragStart={handleDragStart} 
         onDragEnd={handleDragEnd}
       >
@@ -760,25 +807,34 @@ export default function Dashboard() {
                   {weekDays.map((day) => {
                     const dayStandby = standbyByDay[day.iso] || [];
                     return (
-                      <div key={day.iso} className="flex-1 min-w-[140px] p-1.5 border-r last:border-r-0" data-testid={`standby-cell-${day.iso}`}>
-                        {standbyExpanded && dayStandby.map((job) => (
-                          <div key={job.id} onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
-                            <JobCard
-                              job={job}
-                              onDuplicate={handleDuplicate}
-                              onDelete={handleDelete}
-                              onStatusChange={handleStatusChange}
-                              onCancel={handleCancel}
-                              onRestore={handleRestore}
-                            />
-                          </div>
-                        ))}
-                        {!standbyExpanded && dayStandby.length > 0 && (
-                          <div className="text-center">
-                            <Badge variant="secondary" className="text-[10px]">{dayStandby.length} standby</Badge>
-                          </div>
-                        )}
-                      </div>
+                      <DroppableDay
+                        key={day.iso}
+                        id={`standby-${day.iso}`}
+                        date={day.iso}
+                        operatorId={0}
+                        type="standby"
+                        className="flex-1 min-w-[140px] p-1.5 border-r last:border-r-0"
+                      >
+                        <div data-testid={`standby-cell-${day.iso}`}>
+                          {standbyExpanded && dayStandby.map((job) => (
+                            <div key={job.id} onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
+                              <JobCard
+                                job={job}
+                                onDuplicate={handleDuplicate}
+                                onDelete={handleDelete}
+                                onStatusChange={handleStatusChange}
+                                onCancel={handleCancel}
+                                onRestore={handleRestore}
+                              />
+                            </div>
+                          ))}
+                          {!standbyExpanded && dayStandby.length > 0 && (
+                            <div className="text-center">
+                              <Badge variant="secondary" className="text-[10px]">{dayStandby.length} standby</Badge>
+                            </div>
+                          )}
+                        </div>
+                      </DroppableDay>
                     );
                   })}
                 </div>
@@ -804,28 +860,37 @@ export default function Dashboard() {
                   {weekDays.map((day) => {
                     const dayCancelled = cancelledByDay[day.iso] || [];
                     return (
-                      <div key={day.iso} className="flex-1 min-w-[140px] p-1.5 border-r last:border-r-0" data-testid={`cancelled-cell-${day.iso}`}>
-                        <div className="text-center mb-1">
-                          {dayCancelled.length > 0 && (
-                            <Badge variant="secondary" className="text-[10px]" data-testid={`badge-cancelled-count-${day.iso}`}>
-                              <Ban className="w-3 h-3 mr-1" />
-                              {dayCancelled.length} truck{dayCancelled.length !== 1 ? "s" : ""}
-                            </Badge>
-                          )}
-                        </div>
-                        {cancelledExpanded && dayCancelled.map((job) => (
-                          <div key={job.id} className="opacity-60" onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
-                            <JobCard
-                              job={job}
-                              onDuplicate={handleDuplicate}
-                              onDelete={handleDelete}
-                              onStatusChange={handleStatusChange}
-                              onCancel={handleCancel}
-                              onRestore={handleRestore}
-                            />
+                      <DroppableDay
+                        key={day.iso}
+                        id={`cancelled-${day.iso}`}
+                        date={day.iso}
+                        operatorId={0}
+                        type="cancelled"
+                        className="flex-1 min-w-[140px] p-1.5 border-r last:border-r-0"
+                      >
+                        <div data-testid={`cancelled-cell-${day.iso}`}>
+                          <div className="text-center mb-1">
+                            {dayCancelled.length > 0 && (
+                              <Badge variant="secondary" className="text-[10px]" data-testid={`badge-cancelled-count-${day.iso}`}>
+                                <Ban className="w-3 h-3 mr-1" />
+                                {dayCancelled.length} truck{dayCancelled.length !== 1 ? "s" : ""}
+                              </Badge>
+                            )}
                           </div>
-                        ))}
-                      </div>
+                          {cancelledExpanded && dayCancelled.map((job) => (
+                            <div key={job.id} className="opacity-60" onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
+                              <JobCard
+                                job={job}
+                                onDuplicate={handleDuplicate}
+                                onDelete={handleDelete}
+                                onStatusChange={handleStatusChange}
+                                onCancel={handleCancel}
+                                onRestore={handleRestore}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </DroppableDay>
                     );
                   })}
                 </div>
