@@ -48,13 +48,15 @@ interface CreateJobDialogProps {
   onOpenChange: (open: boolean) => void;
   initialData?: Job | null;
   defaultDate?: string;
+  defaultOperatorId?: number | null;
 }
 
 export function CreateJobDialog({ 
   open, 
   onOpenChange, 
   initialData, 
-  defaultDate 
+  defaultDate,
+  defaultOperatorId,
 }: CreateJobDialogProps) {
   const { data: customers } = useCustomers();
   const { data: operators } = useOperators();
@@ -83,13 +85,20 @@ export function CreateJobDialog({
         ...initialData,
         scheduledDate: initialData.scheduledDate,
       });
-    } else if (defaultDate) {
+    } else {
       form.reset({
-        ...form.getValues(),
-        scheduledDate: defaultDate,
+        customerId: 0,
+        scope: "",
+        address: "",
+        startTime: "08:00 AM",
+        status: "missing_info",
+        scheduledDate: defaultDate || new Date().toISOString().split("T")[0],
+        operatorId: defaultOperatorId || undefined,
+        additionalOperatorNeeded: false,
+        manifestNeeded: false,
       });
     }
-  }, [initialData, defaultDate, form]);
+  }, [initialData, defaultDate, defaultOperatorId, form]);
 
   const onSubmit = async (values: FormValues) => {
     try {

@@ -85,6 +85,7 @@ function DayCell({
   onDuplicate,
   onDelete,
   onStatusChange,
+  onCellClick,
 }: { 
   date: string, 
   operatorId: number, 
@@ -93,24 +94,31 @@ function DayCell({
   onDuplicate: (job: Job) => void,
   onDelete: (job: Job) => void,
   onStatusChange: (job: Job, status: string) => void,
+  onCellClick: (date: string, operatorId: number) => void,
 }) {
   return (
     <DroppableDay 
       id={`cell-${operatorId}-${date}`} 
       date={date} 
       operatorId={operatorId}
-      className="min-h-[120px] p-2 border-r border-b bg-card/50 hover:bg-card transition-colors"
+      className="min-h-[120px] p-2 border-r border-b bg-card/50 hover:bg-card transition-colors cursor-pointer"
     >
-      {jobs.map((job) => (
-        <div key={job.id} onClick={(e) => { e.stopPropagation(); onJobClick(job); }}>
-          <JobCard
-            job={job}
-            onDuplicate={onDuplicate}
-            onDelete={onDelete}
-            onStatusChange={onStatusChange}
-          />
-        </div>
-      ))}
+      <div 
+        className="h-full min-h-[100px]" 
+        onClick={() => onCellClick(date, operatorId)}
+        data-testid={`cell-${operatorId}-${date}`}
+      >
+        {jobs.map((job) => (
+          <div key={job.id} onClick={(e) => { e.stopPropagation(); onJobClick(job); }}>
+            <JobCard
+              job={job}
+              onDuplicate={onDuplicate}
+              onDelete={onDelete}
+              onStatusChange={onStatusChange}
+            />
+          </div>
+        ))}
+      </div>
     </DroppableDay>
   );
 }
@@ -200,6 +208,8 @@ export default function Dashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [defaultDate, setDefaultDate] = useState<string | undefined>();
+  const [defaultOperatorId, setDefaultOperatorId] = useState<number | null>(null);
   const [activeDragJob, setActiveDragJob] = useState<Job | null>(null);
   const [mapVisible, setMapVisible] = useState(true);
   const [splitPercent, setSplitPercent] = useState(65);
@@ -450,7 +460,7 @@ export default function Dashboard() {
             {mapVisible ? <PanelRightClose className="w-4 h-4 mr-2" /> : <PanelRightOpen className="w-4 h-4 mr-2" />}
             Map
           </Button>
-          <Button onClick={() => { setSelectedJob(null); setIsCreateOpen(true); }} className="shadow-lg shadow-primary/20" data-testid="button-new-job">
+          <Button onClick={() => { setSelectedJob(null); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }} className="shadow-lg shadow-primary/20" data-testid="button-new-job">
             <Plus className="w-4 h-4 mr-2" />
             New Job
           </Button>
@@ -511,10 +521,11 @@ export default function Dashboard() {
                             date={day.iso} 
                             operatorId={operator.id} 
                             jobs={cellJobs}
-                            onJobClick={(job) => { setSelectedJob(job); setIsCreateOpen(true); }}
+                            onJobClick={(job) => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                             onStatusChange={handleStatusChange}
+                            onCellClick={(date, opId) => { setSelectedJob(null); setDefaultDate(date); setDefaultOperatorId(opId); setIsCreateOpen(true); }}
                           />
                         </div>
                       );
@@ -590,6 +601,8 @@ export default function Dashboard() {
         open={isCreateOpen} 
         onOpenChange={setIsCreateOpen}
         initialData={selectedJob}
+        defaultDate={defaultDate}
+        defaultOperatorId={defaultOperatorId}
       />
     </div>
   );
