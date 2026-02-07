@@ -29,8 +29,10 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange } from "lucide-react";
+import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useTimeOff } from "@/hooks/use-time-off";
+import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 
@@ -68,6 +70,8 @@ export function CreateJobDialog({
   const createJob = useCreateJob();
   const updateJob = useUpdateJob();
   const createJobSeries = useCreateJobSeries();
+  const { data: timeOffRecords } = useTimeOff();
+  const { toast } = useToast();
   const [isMultiDay, setIsMultiDay] = useState(false);
   const [endDate, setEndDate] = useState("");
 
@@ -112,7 +116,44 @@ export function CreateJobDialog({
     }
   }, [initialData, defaultDate, defaultOperatorId, form]);
 
+  const watchedOperatorId = form.watch("operatorId");
+  const watchedDate = form.watch("scheduledDate");
+
+  const operatorOffDays = useMemo(() => {
+    const offDays = new Set<string>();
+    timeOffRecords?.forEach((record) => {
+      const start = new Date(record.startDate + "T00:00:00");
+      const end = new Date(record.endDate + "T00:00:00");
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        offDays.add(`${record.operatorId}-${d.toISOString().split("T")[0]}`);
+      }
+    });
+    if (watchedDate) {
+      operators?.forEach((op) => {
+        if (op.isOutOfState && (op.availableFrom || op.availableTo)) {
+          if (op.availableFrom && watchedDate < op.availableFrom) {
+            offDays.add(`${op.id}-${watchedDate}`);
+          }
+          if (op.availableTo && watchedDate > op.availableTo) {
+            offDays.add(`${op.id}-${watchedDate}`);
+          }
+        }
+      });
+    }
+    return offDays;
+  }, [timeOffRecords, operators, watchedDate]);
+
+  const isOperatorOff = useMemo(() => {
+    if (!watchedOperatorId || !watchedDate) return false;
+    return operatorOffDays.has(`${watchedOperatorId}-${watchedDate}`);
+  }, [watchedOperatorId, watchedDate, operatorOffDays]);
+
   const onSubmit = async (values: FormValues) => {
+    if (values.operatorId && values.scheduledDate && operatorOffDays.has(`${values.operatorId}-${values.scheduledDate}`)) {
+      const opName = operators?.find(o => o.id === values.operatorId)?.name || "This operator";
+      toast({ title: "Cannot Schedule", description: `${opName} has the day off on ${values.scheduledDate}. Remove their time off first.`, variant: "destructive" });
+      return;
+    }
     try {
       if (isEditing && initialData) {
         await updateJob.mutateAsync({ id: initialData.id, ...values });
@@ -328,6 +369,15 @@ export function CreateJobDialog({
                   </FormItem>
                 )}
               />
+
+              {isOperatorOff && (
+                <div className="col-span-full flex items-center gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30" data-testid="warning-operator-off">
+                  <CalendarOff className="w-4 h-4 text-destructive shrink-0" />
+                  <span className="text-sm text-destructive font-medium">
+                    {operators?.find(o => o.id === watchedOperatorId)?.name || "This operator"} has the day off on this date. Remove their time off first to schedule here.
+                  </span>
+                </div>
+              )}
 
               {/* Qualification Warning */}
               <QualificationWarning 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useOperators } from "@/hooks/use-operators";
-import { useTimeOff, useCreateTimeOff, useDeleteTimeOff, type TimeOffWithOperator } from "@/hooks/use-time-off";
+import { useTimeOff, useCreateTimeOff, useDeleteTimeOff, useRemoveTimeOffDay, type TimeOffWithOperator } from "@/hooks/use-time-off";
 import {
   Dialog,
   DialogContent,
@@ -16,8 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Trash2, CalendarOff } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { Loader2, Trash2, CalendarOff, X, ChevronDown, ChevronUp } from "lucide-react";
+import { format, parseISO, addDays, differenceInDays } from "date-fns";
 
 interface TimeOffDialogProps {
   open: boolean;
@@ -31,11 +31,13 @@ export function TimeOffDialog({ open, onOpenChange, defaultOperatorId, defaultDa
   const { data: timeOffRecords, isLoading } = useTimeOff();
   const createTimeOff = useCreateTimeOff();
   const deleteTimeOff = useDeleteTimeOff();
+  const removeDay = useRemoveTimeOffDay();
 
   const [operatorId, setOperatorId] = useState<string>(defaultOperatorId?.toString() || "");
   const [startDate, setStartDate] = useState(defaultDate || new Date().toISOString().split("T")[0]);
   const [endDate, setEndDate] = useState(defaultDate || new Date().toISOString().split("T")[0]);
   const [reason, setReason] = useState("");
+  const [expandedRecord, setExpandedRecord] = useState<number | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -58,6 +60,19 @@ export function TimeOffDialog({ open, onOpenChange, defaultOperatorId, defaultDa
     });
     setReason("");
   };
+
+  const getDaysInRange = (start: string, end: string): string[] => {
+    const days: string[] = [];
+    const startD = parseISO(start);
+    const endD = parseISO(end);
+    const count = differenceInDays(endD, startD) + 1;
+    for (let i = 0; i < count; i++) {
+      days.push(format(addDays(startD, i), "yyyy-MM-dd"));
+    }
+    return days;
+  };
+
+  const isMultiDay = (record: TimeOffWithOperator) => record.startDate !== record.endDate;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -144,34 +159,82 @@ export function TimeOffDialog({ open, onOpenChange, defaultOperatorId, defaultDa
             <p className="text-sm text-muted-foreground text-center py-3">No time off scheduled</p>
           ) : (
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {timeOffRecords.map((record: TimeOffWithOperator) => (
-                <div
-                  key={record.id}
-                  className="flex items-center justify-between gap-2 p-2.5 rounded-md border bg-muted/30"
-                  data-testid={`timeoff-record-${record.id}`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">
-                      {record.operator?.name || "Unknown"}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {format(parseISO(record.startDate), "MMM d, yyyy")}
-                      {record.startDate !== record.endDate && (
-                        <> — {format(parseISO(record.endDate), "MMM d, yyyy")}</>
-                      )}
-                      {record.reason && <span className="ml-1.5 italic">({record.reason})</span>}
-                    </div>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => deleteTimeOff.mutate(record.id)}
-                    data-testid={`button-delete-timeoff-${record.id}`}
+              {timeOffRecords.map((record: TimeOffWithOperator) => {
+                const multi = isMultiDay(record);
+                const isExpanded = expandedRecord === record.id;
+                const days = multi ? getDaysInRange(record.startDate, record.endDate) : [];
+
+                return (
+                  <div
+                    key={record.id}
+                    className="rounded-md border bg-muted/30"
+                    data-testid={`timeoff-record-${record.id}`}
                   >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
+                    <div className="flex items-center justify-between gap-2 p-2.5">
+                      <div className="min-w-0 flex-1 flex items-center gap-2">
+                        {multi && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 shrink-0"
+                            onClick={() => setExpandedRecord(isExpanded ? null : record.id)}
+                            data-testid={`button-expand-timeoff-${record.id}`}
+                          >
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </Button>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium truncate">
+                            {record.operator?.name || "Unknown"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {format(parseISO(record.startDate), "MMM d, yyyy")}
+                            {record.startDate !== record.endDate && (
+                              <> — {format(parseISO(record.endDate), "MMM d, yyyy")} ({days.length} days)</>
+                            )}
+                            {record.reason && <span className="ml-1.5 italic">({record.reason})</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => deleteTimeOff.mutate(record.id)}
+                        data-testid={`button-delete-timeoff-${record.id}`}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+
+                    {multi && isExpanded && (
+                      <div className="px-3 pb-2.5 pt-0 border-t mt-0">
+                        <div className="text-[11px] text-muted-foreground mb-1.5 mt-2">Remove individual days:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {days.map((day) => (
+                            <div
+                              key={day}
+                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border bg-background"
+                              data-testid={`timeoff-day-${record.id}-${day}`}
+                            >
+                              <span>{format(parseISO(day), "EEE M/d")}</span>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5 ml-0.5"
+                                onClick={() => removeDay.mutate({ id: record.id, date: day })}
+                                disabled={removeDay.isPending}
+                                data-testid={`button-remove-day-${record.id}-${day}`}
+                              >
+                                <X className="w-3 h-3 text-destructive" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

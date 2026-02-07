@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
+import { format, addDays, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import {
   DndContext,
   DragOverlay,
@@ -293,6 +293,7 @@ export default function Dashboard() {
   const [holdDialog, setHoldDialog] = useState<{ open: boolean; date: string; operatorId: number }>({ open: false, date: "", operatorId: 0 });
   const [timeOffOpen, setTimeOffOpen] = useState(false);
   const [timeOffDefaultOp, setTimeOffDefaultOp] = useState<number | null>(null);
+  const [mapDate, setMapDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -374,6 +375,12 @@ export default function Dashboard() {
         });
         toast({ title: "Job Cancelled", description: `${(job as any).customer?.name || "Job"} has been cancelled` });
       }
+      return;
+    }
+
+    if (operatorId && dateStr && operatorOffDays.has(`${operatorId}-${dateStr}`)) {
+      const opName = operators?.find((o: any) => o.id === operatorId)?.name || "This operator";
+      toast({ title: "Cannot Schedule", description: `${opName} has the day off on ${format(parseISO(dateStr), "EEE M/d")}. Remove their time off first.`, variant: "destructive" });
       return;
     }
 
@@ -488,6 +495,14 @@ export default function Dashboard() {
     }
   }, [splitPercent]);
 
+  const mapFilteredJobs = useMemo(() => {
+    if (!jobs) return [];
+    return jobs.filter((j: any) => j.scheduledDate === mapDate);
+  }, [jobs, mapDate]);
+
+  const mapJobsWithCoords = mapFilteredJobs.filter((j: any) => j.lat != null && j.lng != null).length;
+  const mapTruckMarkers = operators?.filter((op: any) => op.truckLat != null && op.truckLng != null).length || 0;
+
   useEffect(() => {
     if (!leafletMap.current || !markersLayer.current) return;
 
@@ -496,9 +511,6 @@ export default function Dashboard() {
     const bounds = L.latLngBounds([]);
 
     if (operators) {
-      const todayIso = format(new Date(), "yyyy-MM-dd");
-      const yesterdayIso = format(addDays(new Date(), -1), "yyyy-MM-dd");
-
       operators.forEach((op: any) => {
         let markerLat = op.truckLat;
         let markerLng = op.truckLng;
@@ -507,7 +519,7 @@ export default function Dashboard() {
 
         if (op.isOutOfState && jobs) {
           const prevDayJob = jobs
-            .filter((j: any) => j.operatorId === op.id && j.lat != null && j.lng != null && j.scheduledDate <= todayIso)
+            .filter((j: any) => j.operatorId === op.id && j.lat != null && j.lng != null && j.scheduledDate <= mapDate)
             .sort((a: any, b: any) => b.scheduledDate.localeCompare(a.scheduledDate))[0];
 
           if (prevDayJob) {
@@ -538,45 +550,43 @@ export default function Dashboard() {
       });
     }
 
-    if (jobs) {
-      const jobsWithLocation = jobs.filter((j: any) => j.lat != null && j.lng != null);
-      jobsWithLocation.forEach((job: any) => {
-        const lat = job.lat!;
-        const lng = job.lng!;
-        bounds.extend([lat, lng]);
+    mapFilteredJobs.forEach((job: any) => {
+      if (job.lat == null || job.lng == null) return;
+      const lat = job.lat!;
+      const lng = job.lng!;
+      bounds.extend([lat, lng]);
 
-        const markerColor = STATUS_COLORS[job.status]?.hex || "#9ca3af";
-        const icon = createJobMarkerIcon(markerColor);
-        const operatorName = escapeHtml(job.operator?.name || "Unassigned");
-        const customerName = escapeHtml(job.customer?.name || "Unknown");
-        const statusLabel = STATUS_COLORS[job.status]?.label || job.status;
+      const markerColor = STATUS_COLORS[job.status]?.hex || "#9ca3af";
+      const icon = createJobMarkerIcon(markerColor);
+      const operatorName = escapeHtml(job.operator?.name || "Unassigned");
+      const customerName = escapeHtml(job.customer?.name || "Unknown");
+      const statusLabel = STATUS_COLORS[job.status]?.label || job.status;
 
-        const popup = L.popup().setContent(`
-          <div style="min-width: 180px; font-family: system-ui, sans-serif;">
-            <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${customerName}</div>
-            <div style="font-size: 11px; color: #666;">${escapeHtml(job.scope || "")}</div>
-            <hr style="margin: 4px 0; border-color: #eee;" />
-            <div style="font-size: 11px;"><strong>Operator:</strong> ${operatorName}</div>
-            <div style="font-size: 11px;"><strong>Date:</strong> ${escapeHtml(job.scheduledDate)}</div>
-            <div style="font-size: 11px;"><strong>Time:</strong> ${escapeHtml(job.startTime || "")}</div>
-            <div style="font-size: 11px;"><strong>Status:</strong> 
-              <span style="
-                display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 10px;
-                background: ${markerColor}20; color: ${markerColor}; font-weight: 600;
-              ">${escapeHtml(statusLabel)}</span>
-            </div>
-            <div style="font-size: 11px; margin-top: 3px; color: #888;">${escapeHtml(job.address || "")}</div>
+      const popup = L.popup().setContent(`
+        <div style="min-width: 180px; font-family: system-ui, sans-serif;">
+          <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${customerName}</div>
+          <div style="font-size: 11px; color: #666;">${escapeHtml(job.scope || "")}</div>
+          <hr style="margin: 4px 0; border-color: #eee;" />
+          <div style="font-size: 11px;"><strong>Operator:</strong> ${operatorName}</div>
+          <div style="font-size: 11px;"><strong>Date:</strong> ${escapeHtml(job.scheduledDate)}</div>
+          <div style="font-size: 11px;"><strong>Time:</strong> ${escapeHtml(job.startTime || "")}</div>
+          <div style="font-size: 11px;"><strong>Status:</strong> 
+            <span style="
+              display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 10px;
+              background: ${markerColor}20; color: ${markerColor}; font-weight: 600;
+            ">${escapeHtml(statusLabel)}</span>
           </div>
-        `);
+          <div style="font-size: 11px; margin-top: 3px; color: #888;">${escapeHtml(job.address || "")}</div>
+        </div>
+      `);
 
-        L.marker([lat, lng], { icon }).addTo(markersLayer.current!).bindPopup(popup);
-      });
-    }
+      L.marker([lat, lng], { icon }).addTo(markersLayer.current!).bindPopup(popup);
+    });
 
     if (bounds.isValid()) {
       leafletMap.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
     }
-  }, [jobs, operators]);
+  }, [mapFilteredJobs, operators, mapDate]);
 
   if (jobsLoading || opsLoading) {
     return (
@@ -650,8 +660,8 @@ export default function Dashboard() {
     }
   });
 
-  const jobsWithCoords = jobs?.filter((j: any) => j.lat != null && j.lng != null).length || 0;
-  const truckMarkers = operators?.filter((op: any) => op.truckLat != null && op.truckLng != null).length || 0;
+  const jobsWithCoords = mapJobsWithCoords;
+  const truckMarkers = mapTruckMarkers;
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-muted/30">
@@ -944,6 +954,31 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-primary" />
                     <span className="text-sm font-semibold">Map</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setMapDate(format(addDays(parseISO(mapDate), -1), "yyyy-MM-dd"))}
+                      data-testid="button-map-prev-day"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-xs font-medium min-w-[80px] text-center" data-testid="text-map-date">
+                      {format(parseISO(mapDate), "EEE M/d")}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setMapDate(format(addDays(parseISO(mapDate), 1), "yyyy-MM-dd"))}
+                      data-testid="button-map-next-day"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
                       {jobsWithCoords} job{jobsWithCoords !== 1 ? "s" : ""}
                     </span>
@@ -958,7 +993,7 @@ export default function Dashboard() {
                 <div ref={mapRef} className="flex-1" data-testid="map-container" />
                 <div className="px-3 py-1.5 border-t bg-muted/20 flex flex-wrap gap-x-3 gap-y-1 shrink-0">
                   {Object.entries(STATUS_COLORS).map(([key, val]) => {
-                    const count = jobs?.filter((j: any) => j.status === key && j.lat != null).length || 0;
+                    const count = mapFilteredJobs.filter((j: any) => j.status === key && j.lat != null).length || 0;
                     if (count === 0) return null;
                     return (
                       <div key={key} className="flex items-center gap-1 text-[10px] text-muted-foreground">

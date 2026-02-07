@@ -68,9 +68,12 @@ Jobs use a color-coded status system critical for visual hierarchy:
 
 ### Dashboard Features
 - **Schedule Board**: Weekly grid of operators x days with drag-and-drop job assignment
-- **Collapsible Map Panel**: Embedded Leaflet map at bottom of dashboard showing:
+- **Collapsible Map Panel**: Embedded Leaflet map on the right side of dashboard showing:
+  - **Date Filter**: Day-by-day navigation in map header (defaults to tomorrow). Only jobs for the selected date appear on the map.
   - Job locations as colored circle markers (color = job status)
   - Operator truck parking locations as square markers with truck icons (color = operator color)
+- **Same-Location Indicator**: When multiple jobs share the same address on the same day, each job card shows a truck icon with "X/Y" (e.g., "1/3") position badge
+- **Off-Day Scheduling Protection**: Dragging a job onto an operator who has the day off is blocked with a warning toast. The Create/Edit Job dialog also shows a red warning banner and prevents submission.
 - **Right-Click Context Menu** on job cards:
   - Duplicate Job
   - Change Status (submenu with status options, excluding cancelled/standby)
@@ -102,6 +105,9 @@ Operators have `truckLat` and `truckLng` fields for mapping their truck parking 
 - Time Off button in dashboard header opens management dialog
 - Days marked as time-off show red background with "OFF" label on schedule board
 - AvailabilityChart shows effective truck count (total trucks minus operators off/unavailable)
+- Multi-day records can be expanded to show individual days with remove buttons
+- Removing a day from the middle of a range splits it into two records (POST /api/time-off/:id/remove-day)
+- Removing a day from start/end trims the range accordingly
 
 ### Multi-Day Jobs
 - Jobs can be created spanning multiple days via "Multi-day job" checkbox in CreateJobDialog

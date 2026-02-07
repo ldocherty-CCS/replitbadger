@@ -72,3 +72,28 @@ export function useDeleteTimeOff() {
     },
   });
 }
+
+export function useRemoveTimeOffDay() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, date }: { id: number; date: string }) => {
+      const res = await fetch(`/api/time-off/${id}/remove-day`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to remove day");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time-off"], exact: false });
+      toast({ title: "Day Removed", description: "Time off day has been removed" });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}

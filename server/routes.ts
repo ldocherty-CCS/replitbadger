@@ -254,6 +254,48 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  app.post("/api/time-off/:id/remove-day", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { date } = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
+      const records = await storage.getOperatorTimeOff();
+      const record = records.find(r => r.id === id);
+      if (!record) return res.status(404).json({ message: "Not found" });
+
+      const shiftDate = (d: string, offset: number): string => {
+        const [y, m, day] = d.split("-").map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, day + offset));
+        return dt.toISOString().split("T")[0];
+      };
+
+      if (record.startDate === record.endDate) {
+        await storage.deleteOperatorTimeOff(id);
+        return res.json({ action: "deleted" });
+      }
+
+      if (date === record.startDate) {
+        await storage.updateOperatorTimeOff(id, { startDate: shiftDate(date, 1) });
+        return res.json({ action: "trimmed_start" });
+      }
+
+      if (date === record.endDate) {
+        await storage.updateOperatorTimeOff(id, { endDate: shiftDate(date, -1) });
+        return res.json({ action: "trimmed_end" });
+      }
+
+      await storage.updateOperatorTimeOff(id, { endDate: shiftDate(date, -1) });
+      await storage.createOperatorTimeOff({
+        operatorId: record.operatorId,
+        startDate: shiftDate(date, 1),
+        endDate: record.endDate,
+        reason: record.reason,
+      });
+      return res.json({ action: "split" });
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Invalid request" });
+    }
+  });
+
   // === Multi-day Job Series ===
   app.post("/api/jobs/series", async (req, res) => {
     try {

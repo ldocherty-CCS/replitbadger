@@ -44,6 +44,7 @@ export interface IStorage {
   // Operator Time Off
   getOperatorTimeOff(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(OperatorTimeOff & { operator?: Operator })[]>;
   createOperatorTimeOff(timeOff: InsertOperatorTimeOff): Promise<OperatorTimeOff>;
+  updateOperatorTimeOff(id: number, data: { startDate?: string; endDate?: string }): Promise<OperatorTimeOff>;
   deleteOperatorTimeOff(id: number): Promise<void>;
 }
 
@@ -318,6 +319,11 @@ export class DatabaseStorage implements IStorage {
   async createOperatorTimeOff(timeOff: InsertOperatorTimeOff): Promise<OperatorTimeOff> {
     const [created] = await db.insert(operatorTimeOff).values(timeOff).returning();
     return created;
+  }
+
+  async updateOperatorTimeOff(id: number, data: { startDate?: string; endDate?: string }): Promise<OperatorTimeOff> {
+    const [updated] = await db.update(operatorTimeOff).set(data).where(eq(operatorTimeOff.id, id)).returning();
+    return updated;
   }
 
   async deleteOperatorTimeOff(id: number): Promise<void> {
