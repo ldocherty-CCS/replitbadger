@@ -86,6 +86,7 @@ function DayCell({
   onDelete,
   onStatusChange,
   onCellClick,
+  isEvenRow,
 }: { 
   date: string, 
   operatorId: number, 
@@ -95,16 +96,20 @@ function DayCell({
   onDelete: (job: Job) => void,
   onStatusChange: (job: Job, status: string) => void,
   onCellClick: (date: string, operatorId: number) => void,
+  isEvenRow?: boolean,
 }) {
   return (
     <DroppableDay 
       id={`cell-${operatorId}-${date}`} 
       date={date} 
       operatorId={operatorId}
-      className="min-h-[120px] p-2 border-r border-b bg-card/50 hover:bg-card transition-colors cursor-pointer"
+      className={cn(
+        "min-h-[80px] p-1.5 border-r border-b hover:bg-accent/40 transition-colors cursor-pointer",
+        isEvenRow ? "bg-muted/30" : "bg-card/50"
+      )}
     >
       <div 
-        className="h-full min-h-[100px]" 
+        className="h-full min-h-[60px]" 
         onClick={() => onCellClick(date, operatorId)}
         data-testid={`cell-${operatorId}-${date}`}
       >
@@ -510,9 +515,13 @@ export default function Dashboard() {
               <div className="min-w-fit">
                 {(() => {
                   let lastGroup = "";
+                  let rowIndex = 0;
                   return operators?.map((operator) => {
                     const showGroupHeader = operator.groupName !== lastGroup;
+                    if (showGroupHeader) rowIndex = 0;
                     lastGroup = operator.groupName;
+                    const isEven = rowIndex % 2 === 0;
+                    rowIndex++;
                     return (
                       <div key={operator.id}>
                         {showGroupHeader && (
@@ -526,7 +535,10 @@ export default function Dashboard() {
                           </div>
                         )}
                         <div className="flex border-b last:border-b-0">
-                          <div className="w-48 shrink-0 px-3 py-2.5 border-r bg-card sticky left-0 z-10 flex flex-col justify-center group hover:bg-muted/50 transition-colors">
+                          <div className={cn(
+                            "w-48 shrink-0 px-3 py-2.5 border-r sticky left-0 z-10 flex flex-col justify-center group hover:bg-muted/50 transition-colors",
+                            isEven ? "bg-muted/30" : "bg-card"
+                          )}>
                             <div className="flex items-center gap-2">
                               <div 
                                 className="w-2 h-10 rounded-full shrink-0" 
@@ -561,6 +573,7 @@ export default function Dashboard() {
                             onDelete={handleDelete}
                             onStatusChange={handleStatusChange}
                             onCellClick={(date, opId) => { setSelectedJob(null); setDefaultDate(date); setDefaultOperatorId(opId); setIsCreateOpen(true); }}
+                            isEvenRow={isEven}
                           />
                         </div>
                       );

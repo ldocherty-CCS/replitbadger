@@ -80,49 +80,44 @@ export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange 
       "overflow-hidden border-l-4 shadow-sm hover:shadow-md transition-shadow bg-card",
       statusColorClass.replace('bg-', 'border-l-')
     )}>
-      <CardContent className="p-2.5 space-y-2">
-        <div className="flex justify-between items-start gap-2">
-          <h4 className="font-bold text-sm leading-tight text-foreground line-clamp-2" data-testid={`text-customer-${job.id}`}>
+      <CardContent className="p-1.5 space-y-0.5">
+        <div className="flex justify-between items-start gap-1">
+          <h4 className="font-bold text-xs leading-tight text-foreground line-clamp-1" data-testid={`text-customer-${job.id}`}>
             {job.customer?.name || "Unknown Customer"}
           </h4>
           <div className={cn(
-            "text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap",
+            "text-[9px] uppercase font-bold px-1 py-px rounded-sm whitespace-nowrap leading-tight",
             statusColorClass
           )} data-testid={`badge-status-${job.id}`}>
             {statusLabels[job.status] || job.status}
           </div>
         </div>
 
-        <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-          <Briefcase className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-          <span className="line-clamp-2 leading-snug">{job.scope}</span>
-        </div>
-
-        <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-          <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <MapPin className="w-3 h-3 shrink-0" />
           <span className="line-clamp-1">{job.address}</span>
         </div>
 
-        <div className="flex justify-between items-center pt-1 border-t border-border/50">
-          <div className="flex items-center gap-1 text-xs font-medium text-foreground/80">
-            <Clock className="w-3.5 h-3.5" />
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1 text-[11px] font-medium text-foreground/80">
+            <Clock className="w-3 h-3" />
             {job.startTime}
           </div>
           
-          <div className="flex gap-1">
+          <div className="flex gap-0.5">
             {missingQuals.length > 0 && (
               <div title={`Missing: ${missingQuals.join(", ")}`} className="text-orange-500" data-testid={`icon-missing-quals-${job.id}`}>
-                <ShieldAlert className="w-3.5 h-3.5" />
+                <ShieldAlert className="w-3 h-3" />
               </div>
             )}
             {job.manifestNeeded && (
               <div title="Manifest Needed" className="text-amber-500">
-                <AlertTriangle className="w-3.5 h-3.5" />
+                <AlertTriangle className="w-3 h-3" />
               </div>
             )}
             {job.ticketCreated && (
               <div title="Ticket Created" className="text-blue-500">
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3 h-3" />
               </div>
             )}
           </div>
@@ -141,7 +136,7 @@ export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange 
             {...listeners}
             {...attributes}
             className={cn(
-              "touch-none group relative mb-2 transition-all duration-200",
+              "touch-none group relative mb-1 transition-all duration-200",
               isDragging ? "opacity-50 rotate-2 scale-105 z-50" : "hover:-translate-y-0.5 z-0",
             )}
             data-testid={`card-job-${job.id}`}
@@ -206,7 +201,7 @@ export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange 
       {...listeners}
       {...attributes}
       className={cn(
-        "touch-none group relative mb-2 transition-all duration-200",
+        "touch-none group relative mb-1 transition-all duration-200",
         isDragging ? "opacity-50 rotate-2 scale-105 z-50" : "hover:-translate-y-0.5 z-0",
         isOverlay && "rotate-2 scale-105 shadow-2xl z-50 cursor-grabbing"
       )}
