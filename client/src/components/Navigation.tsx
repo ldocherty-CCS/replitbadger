@@ -7,7 +7,8 @@ import {
   Truck, 
   LogOut, 
   Menu,
-  LayoutDashboard
+  LayoutDashboard,
+  Map
 } from "lucide-react";
 import {
   Sheet,
@@ -25,6 +26,7 @@ export function Navigation() {
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/schedule", label: "Schedule Board", icon: CalendarDays },
+    { href: "/map", label: "Map", icon: Map },
     { href: "/operators", label: "Operators", icon: Truck },
     { href: "/customers", label: "Customers", icon: Users },
   ];
@@ -65,7 +67,11 @@ export function Navigation() {
 
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex flex-col items-end mr-2">
-              <span className="text-sm font-medium">{user.username}</span>
+              <span className="text-sm font-medium" data-testid="text-user-name">
+                {user.firstName && user.lastName 
+                  ? `${user.firstName} ${user.lastName}` 
+                  : user.username || user.email || "User"}
+              </span>
               <span className="text-xs text-muted-foreground capitalize">{user.role}</span>
             </div>
             
