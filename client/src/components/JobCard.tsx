@@ -86,46 +86,38 @@ export function JobCard({ job, isOverlay, compact, onDuplicate, onDelete, onStat
 
   const innerCard = (
     <Card className={cn(
-      "overflow-hidden border-l-4 shadow-sm hover:shadow-md transition-shadow bg-card",
-      statusColorClass.replace('bg-', 'border-l-')
+      "overflow-hidden shadow-sm hover:shadow-md transition-shadow",
+      statusColorClass
     )}>
       <CardContent className="p-1.5 space-y-0.5">
-        <div className="flex justify-between items-start gap-1">
-          <h4 className="font-bold text-xs leading-tight text-foreground line-clamp-1" data-testid={`text-customer-${job.id}`}>
-            {job.customer?.name || "Unknown Customer"}
-          </h4>
-          <div className={cn(
-            "text-[9px] uppercase font-bold px-1 py-px rounded-sm whitespace-nowrap leading-tight",
-            statusColorClass
-          )} data-testid={`badge-status-${job.id}`}>
-            {statusLabels[job.status] || job.status}
-          </div>
-        </div>
+        <h4 className="font-bold text-xs leading-tight line-clamp-1" data-testid={`text-customer-${job.id}`}>
+          {job.customer?.name || "Unknown Customer"}
+        </h4>
 
-        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-1 text-[11px] opacity-90">
           <MapPin className="w-3 h-3 shrink-0" />
           <span className="line-clamp-1">{job.address}</span>
         </div>
 
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-1 text-[11px] font-medium text-foreground/80">
+          <div className="flex items-center gap-1 text-[11px] font-medium opacity-90">
             <Clock className="w-3 h-3" />
             {job.startTime}
           </div>
           
           <div className="flex gap-0.5">
             {missingQuals.length > 0 && (
-              <div title={`Missing: ${missingQuals.join(", ")}`} className="text-orange-500" data-testid={`icon-missing-quals-${job.id}`}>
+              <div title={`Missing: ${missingQuals.join(", ")}`} className="opacity-90" data-testid={`icon-missing-quals-${job.id}`}>
                 <ShieldAlert className="w-3 h-3" />
               </div>
             )}
             {job.manifestNeeded && (
-              <div title="Manifest Needed" className="text-amber-500">
+              <div title="Manifest Needed" className="opacity-90">
                 <AlertTriangle className="w-3 h-3" />
               </div>
             )}
             {job.ticketCreated && (
-              <div title="Ticket Created" className="text-blue-500">
+              <div title="Ticket Created" className="opacity-90">
                 <CheckCircle2 className="w-3 h-3" />
               </div>
             )}
@@ -133,14 +125,14 @@ export function JobCard({ job, isOverlay, compact, onDuplicate, onDelete, onStat
         </div>
 
         {job.additionalOperatorNeeded && (
-          <div className="flex items-center gap-1 text-[10px]" data-testid={`assistant-info-${job.id}`}>
+          <div className="flex items-center gap-1 text-[10px] opacity-90" data-testid={`assistant-info-${job.id}`}>
             <Users className="w-3 h-3 shrink-0" />
             {job.assistantOperator ? (
-              <span className="font-medium text-foreground/80 line-clamp-1" data-testid={`text-assistant-${job.id}`}>
+              <span className="font-medium line-clamp-1" data-testid={`text-assistant-${job.id}`}>
                 + {job.assistantOperator.name}
               </span>
             ) : (
-              <span className="italic text-amber-500" data-testid={`text-needs-assistant-${job.id}`}>
+              <span className="italic font-medium" data-testid={`text-needs-assistant-${job.id}`}>
                 Needs assistant
               </span>
             )}
