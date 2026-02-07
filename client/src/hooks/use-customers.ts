@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@shared/routes";
-import { type InsertCustomer } from "@shared/schema";
+import { api, buildUrl } from "@shared/routes";
+import { type InsertCustomer, type UpdateCustomerRequest } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 export function useCustomers() {
@@ -39,6 +39,32 @@ export function useCreateCustomer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.customers.list.path] });
       toast({ title: "Success", description: "Customer created successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useUpdateCustomer() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: UpdateCustomerRequest & { id: number }) => {
+      const url = buildUrl(api.customers.update.path, { id });
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update customer");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.customers.list.path] });
+      toast({ title: "Success", description: "Customer updated" });
     },
     onError: (error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });

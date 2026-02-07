@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertOperatorSchema, insertJobSchema, insertCustomerSchema, operators, jobs, customers } from './schema';
+import { insertOperatorSchema, insertJobSchema, insertCustomerSchema, insertQualificationSchema, operators, jobs, customers, qualifications } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -121,6 +121,40 @@ export const api = {
       responses: {
         201: z.custom<typeof customers.$inferSelect>(),
         400: errorSchemas.validation,
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/customers/:id' as const,
+      input: insertCustomerSchema.partial(),
+      responses: {
+        200: z.custom<typeof customers.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+  qualifications: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/qualifications' as const,
+      responses: {
+        200: z.array(z.custom<typeof qualifications.$inferSelect>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/qualifications' as const,
+      input: insertQualificationSchema,
+      responses: {
+        201: z.custom<typeof qualifications.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/qualifications/:id' as const,
+      responses: {
+        204: z.void(),
       },
     },
   },

@@ -75,6 +75,43 @@ export async function registerRoutes(
     }
   });
 
+  app.put(api.customers.update.path, async (req, res) => {
+    try {
+      const input = api.customers.update.input.parse(req.body);
+      const customer = await storage.updateCustomer(Number(req.params.id), input);
+      res.json(customer);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(404).json({ message: "Customer not found" });
+    }
+  });
+
+  // === Qualifications ===
+  app.get(api.qualifications.list.path, async (req, res) => {
+    const quals = await storage.getQualifications();
+    res.json(quals);
+  });
+
+  app.post(api.qualifications.create.path, async (req, res) => {
+    try {
+      const input = api.qualifications.create.input.parse(req.body);
+      const qual = await storage.createQualification(input);
+      res.status(201).json(qual);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
+  app.delete(api.qualifications.delete.path, async (req, res) => {
+    await storage.deleteQualification(Number(req.params.id));
+    res.status(204).send();
+  });
+
   // === Jobs ===
   app.get(api.jobs.list.path, async (req, res) => {
     const filters = {
@@ -131,6 +168,28 @@ export async function registerRoutes(
 }
 
 async function seedDatabase() {
+  const existingQuals = await storage.getQualifications();
+  if (existingQuals.length === 0) {
+    const defaultQuals = [
+      { name: "EWN", category: "Safety" },
+      { name: "Enbridge", category: "Pipeline" },
+      { name: "ESN", category: "Pipeline" },
+      { name: "NNG", category: "Pipeline" },
+      { name: "OSHA 10", category: "Safety" },
+      { name: "OSHA 30", category: "Safety" },
+      { name: "Confined Space", category: "Safety" },
+      { name: "CDL A", category: "License" },
+      { name: "CDL B", category: "License" },
+      { name: "WE Energies", category: "Utility" },
+      { name: "Wis Gas", category: "Utility" },
+      { name: "WPS", category: "Utility" },
+    ];
+    for (const q of defaultQuals) {
+      await storage.createQualification(q);
+    }
+    console.log("Seeded qualifications");
+  }
+
   const existingOperators = await storage.getOperators();
   if (existingOperators.length === 0) {
     console.log("Seeding database...");

@@ -29,8 +29,9 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2 } from "lucide-react";
-import { useEffect } from "react";
+import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import { Badge } from "@/components/ui/badge";
 
 // Extend schema to handle string conversion for IDs
 const formSchema = insertJobSchema.extend({
@@ -266,6 +267,14 @@ export function CreateJobDialog({
                 )}
               />
 
+              {/* Qualification Warning */}
+              <QualificationWarning 
+                customerId={form.watch("customerId")} 
+                operatorId={form.watch("operatorId")} 
+                customers={customers} 
+                operators={operators} 
+              />
+
               {/* Contact Info */}
               <FormField
                 control={form.control}
@@ -295,5 +304,52 @@ export function CreateJobDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function QualificationWarning({ customerId, operatorId, customers, operators }: {
+  customerId: number;
+  operatorId: number | null | undefined;
+  customers: any[] | undefined;
+  operators: any[] | undefined;
+}) {
+  const warning = useMemo(() => {
+    if (!customerId || !operatorId || !customers || !operators) return null;
+    const customer = customers.find(c => c.id === customerId);
+    const operator = operators.find(o => o.id === operatorId);
+    if (!customer || !operator) return null;
+    const required: string[] = customer.requiredQuals || [];
+    const has: string[] = operator.qualifications || [];
+    if (required.length === 0) return null;
+    const missing = required.filter(q => !has.includes(q));
+    if (missing.length === 0) return { ok: true, operator: operator.name };
+    return { ok: false, missing, operator: operator.name, customer: customer.name };
+  }, [customerId, operatorId, customers, operators]);
+
+  if (!warning) return null;
+
+  if (warning.ok) {
+    return (
+      <div className="col-span-1 md:col-span-2 flex items-center gap-2 text-sm text-green-600 bg-green-50 dark:bg-green-950/30 dark:text-green-400 rounded-md p-2.5" data-testid="text-qual-ok">
+        <ShieldCheck className="w-4 h-4 shrink-0" />
+        <span>{warning.operator} meets all certification requirements</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="col-span-1 md:col-span-2 rounded-md border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-2.5 space-y-1.5" data-testid="text-qual-warning">
+      <div className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-400">
+        <AlertTriangleIcon className="w-4 h-4 shrink-0" />
+        <span>{warning.operator} is missing required certifications for {warning.customer}</span>
+      </div>
+      <div className="flex flex-wrap gap-1 ml-6">
+        {warning.missing?.map((q) => (
+          <Badge key={q} variant="outline" className="text-[10px] border-orange-400 text-orange-700 dark:text-orange-300">
+            {q}
+          </Badge>
+        ))}
+      </div>
+    </div>
   );
 }

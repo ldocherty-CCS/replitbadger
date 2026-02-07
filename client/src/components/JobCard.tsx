@@ -1,8 +1,8 @@
 import { useDraggable } from "@dnd-kit/core";
-import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette } from "lucide-react";
+import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { Job, Customer } from "@shared/schema";
+import type { Job, Customer, Operator } from "@shared/schema";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/context-menu";
 
 interface JobCardProps {
-  job: Job & { customer?: Customer };
+  job: Job & { customer?: Customer; operator?: Operator };
   isOverlay?: boolean;
   onDuplicate?: (job: Job) => void;
   onDelete?: (job: Job) => void;
@@ -68,6 +68,13 @@ export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange 
   const statusColorClass = statusColors[job.status] || "bg-gray-400 border-gray-400 text-white";
   const hasContextMenu = !isOverlay && (onDuplicate || onDelete || onStatusChange);
 
+  const missingQuals = (() => {
+    const required: string[] = (job.customer as any)?.requiredQuals || [];
+    const has: string[] = (job as any).operator?.qualifications || [];
+    if (required.length === 0 || !job.operatorId) return [];
+    return required.filter(q => !has.includes(q));
+  })();
+
   const innerCard = (
     <Card className={cn(
       "overflow-hidden border-l-4 shadow-sm hover:shadow-md transition-shadow bg-card",
@@ -103,6 +110,11 @@ export function JobCard({ job, isOverlay, onDuplicate, onDelete, onStatusChange 
           </div>
           
           <div className="flex gap-1">
+            {missingQuals.length > 0 && (
+              <div title={`Missing: ${missingQuals.join(", ")}`} className="text-orange-500" data-testid={`icon-missing-quals-${job.id}`}>
+                <ShieldAlert className="w-3.5 h-3.5" />
+              </div>
+            )}
             {job.manifestNeeded && (
               <div title="Manifest Needed" className="text-amber-500">
                 <AlertTriangle className="w-3.5 h-3.5" />

@@ -1,8 +1,8 @@
 import { db } from "./db";
 import {
-  users, operators, customers, jobs,
-  type User, type Operator, type Customer, type Job,
-  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob,
+  users, operators, customers, jobs, qualifications,
+  type User, type Operator, type Customer, type Job, type Qualification,
+  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification,
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest
 } from "@shared/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
@@ -19,6 +19,7 @@ export interface IStorage {
   getCustomers(): Promise<Customer[]>;
   getCustomer(id: number): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
+  updateCustomer(id: number, updates: UpdateCustomerRequest): Promise<Customer>;
 
   // Jobs
   getJobs(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(Job & { customer?: Customer; operator?: Operator })[]>;
@@ -26,6 +27,11 @@ export interface IStorage {
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: number, updates: UpdateJobRequest): Promise<Job>;
   deleteJob(id: number): Promise<void>;
+
+  // Qualifications
+  getQualifications(): Promise<Qualification[]>;
+  createQualification(qual: InsertQualification): Promise<Qualification>;
+  deleteQualification(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -70,6 +76,29 @@ export class DatabaseStorage implements IStorage {
   async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
     const [customer] = await db.insert(customers).values(insertCustomer).returning();
     return customer;
+  }
+
+  async updateCustomer(id: number, updates: UpdateCustomerRequest): Promise<Customer> {
+    const [updated] = await db
+      .update(customers)
+      .set(updates)
+      .where(eq(customers.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Qualifications
+  async getQualifications(): Promise<Qualification[]> {
+    return await db.select().from(qualifications).orderBy(qualifications.name);
+  }
+
+  async createQualification(qual: InsertQualification): Promise<Qualification> {
+    const [created] = await db.insert(qualifications).values(qual).returning();
+    return created;
+  }
+
+  async deleteQualification(id: number): Promise<void> {
+    await db.delete(qualifications).where(eq(qualifications.id, id));
   }
 
   // Jobs

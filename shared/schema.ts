@@ -5,6 +5,13 @@ import { z } from "zod";
 
 // === TABLE DEFINITIONS ===
 
+export const qualifications = pgTable("qualifications", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  category: text("category"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Merged with Replit Auth requirements
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -81,6 +88,7 @@ export const insertUserSchema = createInsertSchema(users).omit({ id: true, creat
 export const insertOperatorSchema = createInsertSchema(operators).omit({ id: true, createdAt: true });
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
+export const insertQualificationSchema = createInsertSchema(qualifications).omit({ id: true, createdAt: true });
 
 // === EXPLICIT API TYPES ===
 
@@ -88,11 +96,13 @@ export type User = typeof users.$inferSelect;
 export type Operator = typeof operators.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
+export type Qualification = typeof qualifications.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertOperator = z.infer<typeof insertOperatorSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertJob = z.infer<typeof insertJobSchema>;
+export type InsertQualification = z.infer<typeof insertQualificationSchema>;
 
 // API Request/Response Types
 export type CreateOperatorRequest = InsertOperator;
