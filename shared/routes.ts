@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertOperatorSchema, insertJobSchema, insertCustomerSchema, insertQualificationSchema, operators, jobs, customers, qualifications } from './schema';
+import { insertOperatorSchema, insertJobSchema, insertCustomerSchema, insertQualificationSchema, insertOperatorQualificationSchema, operators, jobs, customers, qualifications, operatorQualifications } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -153,6 +153,48 @@ export const api = {
     delete: {
       method: 'DELETE' as const,
       path: '/api/qualifications/:id' as const,
+      responses: {
+        204: z.void(),
+      },
+    },
+  },
+  operatorQualifications: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/operator-qualifications' as const,
+      responses: {
+        200: z.array(z.any()),
+      },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/operator-qualifications/:id' as const,
+      responses: {
+        200: z.any(),
+        404: errorSchemas.notFound,
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/operator-qualifications' as const,
+      input: insertOperatorQualificationSchema,
+      responses: {
+        201: z.any(),
+        400: errorSchemas.validation,
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/operator-qualifications/:id' as const,
+      input: insertOperatorQualificationSchema.partial(),
+      responses: {
+        200: z.any(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/operator-qualifications/:id' as const,
       responses: {
         204: z.void(),
       },

@@ -1,9 +1,10 @@
 import { db } from "./db";
 import {
-  users, operators, customers, jobs, qualifications,
-  type User, type Operator, type Customer, type Job, type Qualification,
-  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification,
-  type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest
+  users, operators, customers, jobs, qualifications, operatorQualifications,
+  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification,
+  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification,
+  type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
+  type OperatorQualificationWithDetails
 } from "@shared/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 
@@ -32,6 +33,13 @@ export interface IStorage {
   getQualifications(): Promise<Qualification[]>;
   createQualification(qual: InsertQualification): Promise<Qualification>;
   deleteQualification(id: number): Promise<void>;
+
+  // Operator Qualifications
+  getOperatorQualifications(operatorId?: number): Promise<OperatorQualificationWithDetails[]>;
+  getOperatorQualification(id: number): Promise<OperatorQualificationWithDetails | undefined>;
+  createOperatorQualification(oq: InsertOperatorQualification): Promise<OperatorQualification>;
+  updateOperatorQualification(id: number, updates: Partial<InsertOperatorQualification>): Promise<OperatorQualification>;
+  deleteOperatorQualification(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -178,6 +186,85 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: number): Promise<void> {
     await db.delete(jobs).where(eq(jobs.id, id));
+  }
+
+  // Operator Qualifications
+  async getOperatorQualifications(operatorId?: number): Promise<OperatorQualificationWithDetails[]> {
+    let query = db.select({
+      id: operatorQualifications.id,
+      operatorId: operatorQualifications.operatorId,
+      qualificationId: operatorQualifications.qualificationId,
+      status: operatorQualifications.status,
+      issueDate: operatorQualifications.issueDate,
+      expirationDate: operatorQualifications.expirationDate,
+      documentUrl: operatorQualifications.documentUrl,
+      documentName: operatorQualifications.documentName,
+      notes: operatorQualifications.notes,
+      createdAt: operatorQualifications.createdAt,
+      updatedAt: operatorQualifications.updatedAt,
+      operator: operators,
+      qualification: qualifications,
+    })
+    .from(operatorQualifications)
+    .leftJoin(operators, eq(operatorQualifications.operatorId, operators.id))
+    .leftJoin(qualifications, eq(operatorQualifications.qualificationId, qualifications.id));
+
+    if (operatorId) {
+      // @ts-ignore
+      query = query.where(eq(operatorQualifications.operatorId, operatorId));
+    }
+
+    // @ts-ignore
+    const results = await query.orderBy(operators.name, qualifications.name);
+    return results.map(row => ({
+      ...row,
+      operator: row.operator || undefined,
+      qualification: row.qualification || undefined,
+    }));
+  }
+
+  async getOperatorQualification(id: number): Promise<OperatorQualificationWithDetails | undefined> {
+    const results = await db.select({
+      id: operatorQualifications.id,
+      operatorId: operatorQualifications.operatorId,
+      qualificationId: operatorQualifications.qualificationId,
+      status: operatorQualifications.status,
+      issueDate: operatorQualifications.issueDate,
+      expirationDate: operatorQualifications.expirationDate,
+      documentUrl: operatorQualifications.documentUrl,
+      documentName: operatorQualifications.documentName,
+      notes: operatorQualifications.notes,
+      createdAt: operatorQualifications.createdAt,
+      updatedAt: operatorQualifications.updatedAt,
+      operator: operators,
+      qualification: qualifications,
+    })
+    .from(operatorQualifications)
+    .leftJoin(operators, eq(operatorQualifications.operatorId, operators.id))
+    .leftJoin(qualifications, eq(operatorQualifications.qualificationId, qualifications.id))
+    .where(eq(operatorQualifications.id, id));
+
+    if (results.length === 0) return undefined;
+    const row = results[0];
+    return { ...row, operator: row.operator || undefined, qualification: row.qualification || undefined };
+  }
+
+  async createOperatorQualification(oq: InsertOperatorQualification): Promise<OperatorQualification> {
+    const [created] = await db.insert(operatorQualifications).values(oq).returning();
+    return created;
+  }
+
+  async updateOperatorQualification(id: number, updates: Partial<InsertOperatorQualification>): Promise<OperatorQualification> {
+    const [updated] = await db
+      .update(operatorQualifications)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(operatorQualifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteOperatorQualification(id: number): Promise<void> {
+    await db.delete(operatorQualifications).where(eq(operatorQualifications.id, id));
   }
 }
 

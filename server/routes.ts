@@ -161,6 +161,50 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // === Operator Qualifications ===
+  app.get(api.operatorQualifications.list.path, async (req, res) => {
+    const operatorId = req.query.operatorId ? Number(req.query.operatorId) : undefined;
+    const oqs = await storage.getOperatorQualifications(operatorId);
+    res.json(oqs);
+  });
+
+  app.get(api.operatorQualifications.get.path, async (req, res) => {
+    const oq = await storage.getOperatorQualification(Number(req.params.id));
+    if (!oq) return res.status(404).json({ message: "Operator qualification not found" });
+    res.json(oq);
+  });
+
+  app.post(api.operatorQualifications.create.path, async (req, res) => {
+    try {
+      const input = api.operatorQualifications.create.input.parse(req.body);
+      const oq = await storage.createOperatorQualification(input);
+      res.status(201).json(oq);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
+  app.put(api.operatorQualifications.update.path, async (req, res) => {
+    try {
+      const input = api.operatorQualifications.update.input.parse(req.body);
+      const oq = await storage.updateOperatorQualification(Number(req.params.id), input);
+      res.json(oq);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(404).json({ message: "Operator qualification not found" });
+    }
+  });
+
+  app.delete(api.operatorQualifications.delete.path, async (req, res) => {
+    await storage.deleteOperatorQualification(Number(req.params.id));
+    res.status(204).send();
+  });
+
   // Seed Data
   await seedDatabase();
 
