@@ -40,6 +40,8 @@ export const operators = pgTable("operators", {
   operatorType: text("operator_type").default("operator").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   isOutOfState: boolean("is_out_of_state").default(false).notNull(),
+  availableFrom: text("available_from"),
+  availableTo: text("available_to"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
