@@ -220,6 +220,95 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // === Operator Time Off ===
+  app.get("/api/time-off", async (req, res) => {
+    const filters = {
+      startDate: req.query.startDate as string | undefined,
+      endDate: req.query.endDate as string | undefined,
+      operatorId: req.query.operatorId ? Number(req.query.operatorId) : undefined,
+    };
+    const results = await storage.getOperatorTimeOff(filters);
+    res.json(results);
+  });
+
+  app.post("/api/time-off", async (req, res) => {
+    try {
+      const input = z.object({
+        operatorId: z.number(),
+        startDate: z.string(),
+        endDate: z.string(),
+        reason: z.string().optional().nullable(),
+      }).parse(req.body);
+      const created = await storage.createOperatorTimeOff(input);
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create time off" });
+    }
+  });
+
+  app.delete("/api/time-off/:id", async (req, res) => {
+    await storage.deleteOperatorTimeOff(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // === Multi-day Job Series ===
+  app.post("/api/jobs/series", async (req, res) => {
+    try {
+      const input = z.object({
+        job: z.object({
+          customerId: z.number().nullable().optional(),
+          operatorId: z.number().nullable().optional(),
+          scope: z.string().optional(),
+          startTime: z.string().optional(),
+          address: z.string().optional(),
+          lat: z.number().nullable().optional(),
+          lng: z.number().nullable().optional(),
+          requestorContact: z.string().nullable().optional(),
+          onSiteContact: z.string().nullable().optional(),
+          status: z.string().optional(),
+          billingInfo: z.string().nullable().optional(),
+          poNumber: z.string().nullable().optional(),
+          ticketCreated: z.boolean().optional(),
+          manifestNeeded: z.boolean().optional(),
+          siteQuals: z.array(z.string()).nullable().optional(),
+          additionalOperatorNeeded: z.boolean().optional(),
+          assistantOperatorId: z.number().nullable().optional(),
+          sortOrder: z.number().optional(),
+        }),
+        startDate: z.string(),
+        endDate: z.string(),
+      }).parse(req.body);
+
+      const start = new Date(input.startDate);
+      const end = new Date(input.endDate);
+      if (start > end) {
+        return res.status(400).json({ message: "Start date must be before or equal to end date" });
+      }
+      const seriesId = `series-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const created: any[] = [];
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split("T")[0];
+        const job = await storage.createJob({
+          ...input.job,
+          scheduledDate: dateStr,
+          seriesId,
+        });
+        created.push(job);
+      }
+
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create job series" });
+    }
+  });
+
   // Seed Data
   await seedDatabase();
 

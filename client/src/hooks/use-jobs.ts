@@ -121,6 +121,31 @@ export function useDuplicateJob() {
   });
 }
 
+export function useCreateJobSeries() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { job: InsertJob; startDate: string; endDate: string }) => {
+      const res = await fetch("/api/jobs/series", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to create job series");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.jobs.list.path] });
+      toast({ title: "Success", description: `Created ${data.length} jobs across multiple days` });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useDeleteJob() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

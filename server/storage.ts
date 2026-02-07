@@ -1,8 +1,8 @@
 import { db } from "./db";
 import {
-  users, operators, customers, jobs, qualifications, operatorQualifications,
-  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification,
-  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification,
+  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff,
+  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff,
+  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff,
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
   type OperatorQualificationWithDetails
 } from "@shared/schema";
@@ -40,6 +40,11 @@ export interface IStorage {
   createOperatorQualification(oq: InsertOperatorQualification): Promise<OperatorQualification>;
   updateOperatorQualification(id: number, updates: Partial<InsertOperatorQualification>): Promise<OperatorQualification>;
   deleteOperatorQualification(id: number): Promise<void>;
+
+  // Operator Time Off
+  getOperatorTimeOff(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(OperatorTimeOff & { operator?: Operator })[]>;
+  createOperatorTimeOff(timeOff: InsertOperatorTimeOff): Promise<OperatorTimeOff>;
+  deleteOperatorTimeOff(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -133,6 +138,7 @@ export class DatabaseStorage implements IStorage {
       additionalOperatorNeeded: jobs.additionalOperatorNeeded,
       assistantOperatorId: jobs.assistantOperatorId,
       sortOrder: jobs.sortOrder,
+      seriesId: jobs.seriesId,
       createdAt: jobs.createdAt,
       customer: customers,
       operator: operators,
@@ -270,6 +276,52 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOperatorQualification(id: number): Promise<void> {
     await db.delete(operatorQualifications).where(eq(operatorQualifications.id, id));
+  }
+
+  // Operator Time Off
+  async getOperatorTimeOff(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(OperatorTimeOff & { operator?: Operator })[]> {
+    let query = db.select({
+      id: operatorTimeOff.id,
+      operatorId: operatorTimeOff.operatorId,
+      startDate: operatorTimeOff.startDate,
+      endDate: operatorTimeOff.endDate,
+      reason: operatorTimeOff.reason,
+      createdAt: operatorTimeOff.createdAt,
+      operator: operators,
+    })
+    .from(operatorTimeOff)
+    .leftJoin(operators, eq(operatorTimeOff.operatorId, operators.id));
+
+    const conditions = [];
+    if (filters?.startDate) {
+      conditions.push(gte(operatorTimeOff.endDate, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(operatorTimeOff.startDate, filters.endDate));
+    }
+    if (filters?.operatorId) {
+      conditions.push(eq(operatorTimeOff.operatorId, filters.operatorId));
+    }
+    if (conditions.length > 0) {
+      // @ts-ignore
+      query = query.where(and(...conditions));
+    }
+
+    // @ts-ignore
+    const results = await query.orderBy(operatorTimeOff.startDate);
+    return results.map(row => ({
+      ...row,
+      operator: row.operator || undefined,
+    }));
+  }
+
+  async createOperatorTimeOff(timeOff: InsertOperatorTimeOff): Promise<OperatorTimeOff> {
+    const [created] = await db.insert(operatorTimeOff).values(timeOff).returning();
+    return created;
+  }
+
+  async deleteOperatorTimeOff(id: number): Promise<void> {
+    await db.delete(operatorTimeOff).where(eq(operatorTimeOff.id, id));
   }
 }
 

@@ -19,7 +19,9 @@ import { useOperators } from "@/hooks/use-operators";
 import { JobCard } from "@/components/JobCard";
 import { CreateJobDialog } from "@/components/CreateJobDialog";
 import { PlaceHoldDialog } from "@/components/PlaceHoldDialog";
-import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw } from "lucide-react";
+import { TimeOffDialog } from "@/components/TimeOffDialog";
+import { useTimeOff } from "@/hooks/use-time-off";
+import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getOperatorColor } from "@/lib/operator-colors";
@@ -95,6 +97,7 @@ function DayCell({
   onCellClick,
   onPlaceHold,
   isEvenRow,
+  isOff,
 }: { 
   date: string, 
   operatorId: number, 
@@ -108,6 +111,7 @@ function DayCell({
   onCellClick: (date: string, operatorId: number) => void,
   onPlaceHold: (date: string, operatorId: number) => void,
   isEvenRow?: boolean,
+  isOff?: boolean,
 }) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -137,10 +141,17 @@ function DayCell({
       date={date} 
       operatorId={operatorId}
       className={cn(
-        "min-h-[80px] p-1.5 border-r border-b hover:bg-accent/40 transition-colors cursor-pointer",
-        isEvenRow ? "bg-muted/30" : "bg-card/50"
+        "min-h-[80px] p-1.5 border-r border-b hover:bg-accent/40 transition-colors cursor-pointer relative",
+        isOff
+          ? "bg-red-50/60 dark:bg-red-950/20"
+          : isEvenRow ? "bg-muted/30" : "bg-card/50"
       )}
     >
+      {isOff && jobs.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-[10px] font-semibold text-red-400 dark:text-red-500 uppercase tracking-wider">OFF</span>
+        </div>
+      )}
       <div 
         className="h-full min-h-[60px]" 
         onClick={() => onCellClick(date, operatorId)}
@@ -193,28 +204,32 @@ function AvailabilityChart({
   weekDays,
   jobs,
   operators,
+  operatorOffDays = new Set(),
 }: {
   weekDays: { date: Date; iso: string; label: string }[];
   jobs: Job[] | undefined;
   operators: Operator[] | undefined;
+  operatorOffDays?: Set<string>;
 }) {
   const totalTrucks = operators?.length || 0;
 
   const dayStats = weekDays.map((day) => {
-    const dayJobs = jobs?.filter((j) => j.scheduledDate === day.iso) || [];
+    const dayJobs = jobs?.filter((j) => j.scheduledDate === day.iso && j.status !== "cancelled" && j.status !== "standby") || [];
     const uniqueOperatorsBooked = new Set(dayJobs.map((j) => j.operatorId).filter(Boolean));
     const booked = uniqueOperatorsBooked.size;
-    const available = Math.max(0, totalTrucks - booked);
-    const overbooked = dayJobs.length > totalTrucks;
-    const overbookedCount = dayJobs.length - totalTrucks;
-    return { ...day, booked, available, overbooked, overbookedCount };
+    const offCount = operators?.filter(op => operatorOffDays?.has(`${op.id}-${day.iso}`)).length || 0;
+    const effectiveTrucks = totalTrucks - offCount;
+    const available = Math.max(0, effectiveTrucks - booked);
+    const overbooked = booked > effectiveTrucks;
+    const overbookedCount = booked - effectiveTrucks;
+    return { ...day, booked, available, overbooked, overbookedCount, effectiveTrucks, offCount };
   });
 
   return (
     <div className="border-t bg-card px-4 py-3" data-testid="availability-chart">
       <div className="flex gap-2 items-end h-16">
         {dayStats.map((day) => {
-          const availableRatio = totalTrucks > 0 ? day.available / totalTrucks : 0;
+          const availableRatio = day.effectiveTrucks > 0 ? day.available / day.effectiveTrucks : 0;
           const barHeight = day.overbooked ? 100 : Math.max(6, availableRatio * 100);
 
           return (
@@ -242,7 +257,7 @@ function AvailabilityChart({
                   {day.overbooked ? (
                     <span>{day.overbookedCount} over</span>
                   ) : (
-                    <span>{day.available}/{totalTrucks}</span>
+                    <span>{day.available}/{day.effectiveTrucks}</span>
                   )}
                 </div>
                 <div className="text-sm text-muted-foreground leading-tight font-medium">
@@ -269,6 +284,8 @@ export default function Dashboard() {
   const [cancelledExpanded, setCancelledExpanded] = useState(false);
   const [standbyExpanded, setStandbyExpanded] = useState(true);
   const [holdDialog, setHoldDialog] = useState<{ open: boolean; date: string; operatorId: number }>({ open: false, date: "", operatorId: 0 });
+  const [timeOffOpen, setTimeOffOpen] = useState(false);
+  const [timeOffDefaultOp, setTimeOffDefaultOp] = useState<number | null>(null);
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -293,6 +310,10 @@ export default function Dashboard() {
   });
 
   const { data: operators, isLoading: opsLoading } = useOperators();
+  const { data: timeOffRecords } = useTimeOff({
+    startDate: weekDays[0].iso,
+    endDate: weekDays[6].iso,
+  });
 
   const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } });
@@ -538,6 +559,15 @@ export default function Dashboard() {
   });
   Object.values(jobsMap).forEach(arr => arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)));
 
+  const operatorOffDays = new Set<string>();
+  timeOffRecords?.forEach((record) => {
+    const start = new Date(record.startDate);
+    const end = new Date(record.endDate);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      operatorOffDays.add(`${record.operatorId}-${format(d, "yyyy-MM-dd")}`);
+    }
+  });
+
   const jobsWithCoords = jobs?.filter((j: any) => j.lat != null && j.lng != null).length || 0;
   const truckMarkers = operators?.filter((op: any) => op.truckLat != null && op.truckLng != null).length || 0;
 
@@ -565,6 +595,15 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setTimeOffDefaultOp(null); setTimeOffOpen(true); }}
+            data-testid="button-time-off"
+          >
+            <CalendarOff className="w-4 h-4 mr-2" />
+            Time Off
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -658,6 +697,7 @@ export default function Dashboard() {
                     {weekDays.map((day) => {
                       const key = `${operator.id}-${day.iso}`;
                       const cellJobs = jobsMap[key] || [];
+                      const isOff = operatorOffDays.has(key);
                       
                       return (
                         <div key={day.iso} className="flex-1 min-w-[140px]">
@@ -674,6 +714,7 @@ export default function Dashboard() {
                             onCellClick={(date, opId) => { setSelectedJob(null); setDefaultDate(date); setDefaultOperatorId(opId); setIsCreateOpen(true); }}
                             onPlaceHold={handlePlaceHold}
                             isEvenRow={isEven}
+                            isOff={isOff}
                           />
                         </div>
                       );
@@ -837,7 +878,7 @@ export default function Dashboard() {
         </DragOverlay>
       </DndContext>
 
-      <AvailabilityChart weekDays={weekDays} jobs={jobs} operators={operators} />
+      <AvailabilityChart weekDays={weekDays} jobs={jobs} operators={operators} operatorOffDays={operatorOffDays} />
 
       <CreateJobDialog 
         open={isCreateOpen} 
@@ -852,6 +893,12 @@ export default function Dashboard() {
         onOpenChange={(open) => setHoldDialog(prev => ({ ...prev, open }))}
         date={holdDialog.date}
         operatorId={holdDialog.operatorId}
+      />
+
+      <TimeOffDialog
+        open={timeOffOpen}
+        onOpenChange={setTimeOffOpen}
+        defaultOperatorId={timeOffDefaultOp}
       />
     </div>
   );

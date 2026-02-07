@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertJobSchema, type Job } from "@shared/schema";
-import { useCreateJob, useUpdateJob } from "@/hooks/use-jobs";
+import { useCreateJob, useUpdateJob, useCreateJobSeries } from "@/hooks/use-jobs";
 import { useCustomers } from "@/hooks/use-customers";
 import { useOperators } from "@/hooks/use-operators";
 import {
@@ -29,8 +29,8 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 
@@ -67,6 +67,9 @@ export function CreateJobDialog({
   const { data: operators } = useOperators();
   const createJob = useCreateJob();
   const updateJob = useUpdateJob();
+  const createJobSeries = useCreateJobSeries();
+  const [isMultiDay, setIsMultiDay] = useState(false);
+  const [endDate, setEndDate] = useState("");
 
   const isEditing = !!initialData;
 
@@ -90,6 +93,8 @@ export function CreateJobDialog({
         ...initialData,
         scheduledDate: initialData.scheduledDate,
       });
+      setIsMultiDay(false);
+      setEndDate("");
     } else {
       form.reset({
         customerId: 0,
@@ -102,6 +107,8 @@ export function CreateJobDialog({
         additionalOperatorNeeded: false,
         manifestNeeded: false,
       });
+      setIsMultiDay(false);
+      setEndDate("");
     }
   }, [initialData, defaultDate, defaultOperatorId, form]);
 
@@ -109,17 +116,26 @@ export function CreateJobDialog({
     try {
       if (isEditing && initialData) {
         await updateJob.mutateAsync({ id: initialData.id, ...values });
+      } else if (isMultiDay && endDate && endDate > values.scheduledDate) {
+        const { scheduledDate, ...jobData } = values;
+        await createJobSeries.mutateAsync({
+          job: values,
+          startDate: values.scheduledDate,
+          endDate: endDate,
+        });
       } else {
         await createJob.mutateAsync(values);
       }
       onOpenChange(false);
       form.reset();
+      setIsMultiDay(false);
+      setEndDate("");
     } catch (error) {
       // handled by mutation hook
     }
   };
 
-  const isPending = createJob.isPending || updateJob.isPending;
+  const isPending = createJob.isPending || updateJob.isPending || createJobSeries.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -228,14 +244,45 @@ export function CreateJobDialog({
                 name="scheduledDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Date</FormLabel>
+                    <FormLabel>{isMultiDay ? "Start Date" : "Date"}</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" {...field} data-testid="input-scheduled-date" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {!isEditing && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 mt-1">
+                    <Checkbox
+                      checked={isMultiDay}
+                      onCheckedChange={(checked) => {
+                        setIsMultiDay(!!checked);
+                        if (!checked) setEndDate("");
+                      }}
+                      data-testid="checkbox-multi-day"
+                    />
+                    <label className="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
+                      <CalendarRange className="w-4 h-4" />
+                      Multi-day job
+                    </label>
+                  </div>
+                  {isMultiDay && (
+                    <div>
+                      <label className="text-sm font-medium">End Date</label>
+                      <Input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        min={form.watch("scheduledDate")}
+                        data-testid="input-end-date"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Time */}
               <FormField
