@@ -132,6 +132,7 @@ export class DatabaseStorage implements IStorage {
       siteQuals: jobs.siteQuals,
       additionalOperatorNeeded: jobs.additionalOperatorNeeded,
       assistantOperatorId: jobs.assistantOperatorId,
+      sortOrder: jobs.sortOrder,
       createdAt: jobs.createdAt,
       customer: customers,
       operator: operators,
@@ -159,7 +160,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // @ts-ignore
-    const results = await query.orderBy(jobs.scheduledDate, jobs.startTime);
+    const results = await query.orderBy(jobs.scheduledDate, jobs.sortOrder, jobs.startTime);
     
     return results.map(row => ({
       ...row,

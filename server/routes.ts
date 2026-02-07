@@ -113,6 +113,21 @@ export async function registerRoutes(
   });
 
   // === Jobs ===
+  app.put("/api/jobs/reorder", async (req, res) => {
+    try {
+      const items = z.array(z.object({ id: z.number(), sortOrder: z.number() })).parse(req.body);
+      for (const item of items) {
+        await storage.updateJob(item.id, { sortOrder: item.sortOrder });
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Reorder failed" });
+    }
+  });
+
   app.get(api.jobs.list.path, async (req, res) => {
     const filters = {
       startDate: req.query.startDate as string,

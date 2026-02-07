@@ -81,6 +81,7 @@ export const jobs = pgTable("jobs", {
   siteQuals: text("site_quals").array(),
   additionalOperatorNeeded: boolean("additional_operator_needed").default(false),
   assistantOperatorId: integer("assistant_operator_id").references(() => operators.id),
+  sortOrder: integer("sort_order").default(0),
   
   createdAt: timestamp("created_at").defaultNow(),
 });
