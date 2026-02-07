@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown, MapPinOff } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -82,7 +83,12 @@ export default function Operators() {
                     {op.name.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <CardTitle className="text-lg font-bold">{op.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg font-bold">{op.name}</CardTitle>
+                      {op.isOutOfState && (
+                        <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 dark:text-amber-400">OOS</Badge>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">{op.groupName}</p>
                   </div>
                 </div>
@@ -106,7 +112,9 @@ export default function Operators() {
                     <div className="font-medium text-right">{op.phone || "N/A"}</div>
                     
                     <div className="text-muted-foreground">Location:</div>
-                    <div className="font-medium text-right truncate">{op.truckLocation || "N/A"}</div>
+                    <div className="font-medium text-right truncate">
+                      {op.isOutOfState ? "Near prev. job" : (op.truckLocation || "N/A")}
+                    </div>
                   </div>
 
                   <div className="pt-2">
@@ -263,12 +271,15 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
   const isEditing = !!initialData;
   const isPending = createOp.isPending || updateOp.isPending;
   const [selectedQuals, setSelectedQuals] = useState<string[]>([]);
+  const [isOutOfState, setIsOutOfState] = useState(false);
 
   const handleOpen = (isOpen: boolean) => {
-    if (isOpen && initialData?.qualifications) {
-      setSelectedQuals(initialData.qualifications);
+    if (isOpen && initialData) {
+      setSelectedQuals(initialData.qualifications || []);
+      setIsOutOfState(initialData.isOutOfState || false);
     } else if (isOpen) {
       setSelectedQuals([]);
+      setIsOutOfState(false);
     }
     onOpenChange(isOpen);
   };
@@ -283,6 +294,7 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
       truckLocation: formData.get("truckLocation") as string,
       color: formData.get("color") as string,
       qualifications: selectedQuals,
+      isOutOfState,
     };
 
     try {
@@ -326,6 +338,18 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
           <div className="space-y-2">
             <Label htmlFor="truckLocation">Truck Park Location</Label>
             <Input id="truckLocation" name="truckLocation" defaultValue={initialData?.truckLocation} data-testid="input-operator-truck" />
+          </div>
+          <div className="flex items-start gap-3 rounded-md border p-3">
+            <Checkbox
+              id="isOutOfState"
+              checked={isOutOfState}
+              onCheckedChange={(v) => setIsOutOfState(v === true)}
+              data-testid="checkbox-out-of-state"
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="isOutOfState" className="font-medium cursor-pointer">Out of State</Label>
+              <p className="text-xs text-muted-foreground">Truck location will be assumed near the previous day's job site</p>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Certifications / OQs</Label>

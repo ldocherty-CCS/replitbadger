@@ -351,19 +351,44 @@ export default function Dashboard() {
     const bounds = L.latLngBounds([]);
 
     if (operators) {
+      const todayIso = format(new Date(), "yyyy-MM-dd");
+      const yesterdayIso = format(addDays(new Date(), -1), "yyyy-MM-dd");
+
       operators.forEach((op: any) => {
-        if (op.truckLat != null && op.truckLng != null) {
-          bounds.extend([op.truckLat, op.truckLng]);
+        let markerLat = op.truckLat;
+        let markerLng = op.truckLng;
+        let locationLabel = op.truckLocation || "Unknown";
+        let locationNote = "Truck Parked At";
+
+        if (op.isOutOfState && jobs) {
+          const prevDayJob = jobs
+            .filter((j: any) => j.operatorId === op.id && j.lat != null && j.lng != null && j.scheduledDate <= todayIso)
+            .sort((a: any, b: any) => b.scheduledDate.localeCompare(a.scheduledDate))[0];
+
+          if (prevDayJob) {
+            markerLat = prevDayJob.lat;
+            markerLng = prevDayJob.lng;
+            locationLabel = prevDayJob.address || "Previous job site";
+            locationNote = "Out-of-State \u2014 Near Previous Job";
+          }
+        }
+
+        if (markerLat != null && markerLng != null) {
+          bounds.extend([markerLat, markerLng]);
           const icon = createTruckMarkerIcon(op.color || "#3b82f6");
+          const outOfStateBadge = op.isOutOfState
+            ? '<div style="font-size:10px;color:#f59e0b;font-weight:600;margin-top:4px;">OUT OF STATE</div>'
+            : '';
           const popup = L.popup().setContent(`
             <div style="min-width: 160px; font-family: system-ui, sans-serif;">
               <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${escapeHtml(op.name)}</div>
-              <div style="font-size: 11px; color: #888;">Truck Parked At</div>
-              <div style="font-size: 12px; margin-top: 2px;">${escapeHtml(op.truckLocation || "Unknown")}</div>
+              ${outOfStateBadge}
+              <div style="font-size: 11px; color: #888;">${escapeHtml(locationNote)}</div>
+              <div style="font-size: 12px; margin-top: 2px;">${escapeHtml(locationLabel)}</div>
               <div style="font-size: 11px; color: #888; margin-top: 4px;">${escapeHtml(op.groupName)}</div>
             </div>
           `);
-          L.marker([op.truckLat, op.truckLng], { icon }).addTo(markersLayer.current!).bindPopup(popup);
+          L.marker([markerLat, markerLng], { icon }).addTo(markersLayer.current!).bindPopup(popup);
         }
       });
     }
@@ -506,7 +531,12 @@ export default function Dashboard() {
                         />
                         <div>
                           <div className="font-bold text-sm leading-tight">{operator.name}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">{operator.groupName}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {operator.groupName}
+                            {operator.isOutOfState && (
+                              <span className="ml-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">OOS</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
