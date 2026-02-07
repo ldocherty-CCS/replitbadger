@@ -146,9 +146,9 @@ export async function registerRoutes(
 
   app.post(api.jobs.create.path, async (req, res) => {
     try {
-      // Coerce numeric fields if they come as strings (though zod schema usually handles this if defined correctly, explicit coercion in schema is safer)
       const input = api.jobs.create.input.parse(req.body);
-      const job = await storage.createJob(input);
+      const userId = (req.user as any)?.claims?.sub || null;
+      const job = await storage.createJob({ ...input, createdBy: userId });
       res.status(201).json(job);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -330,15 +330,20 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Start date must be before or equal to end date" });
       }
       const seriesId = `series-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const userId = (req.user as any)?.claims?.sub || null;
       const created: any[] = [];
 
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split("T")[0];
         const job = await storage.createJob({
           ...input.job,
+          scope: input.job.scope || "",
+          startTime: input.job.startTime || "08:00 AM",
+          address: input.job.address || "",
           scheduledDate: dateStr,
           seriesId,
-        });
+          createdBy: userId,
+        } as any);
         created.push(job);
       }
 

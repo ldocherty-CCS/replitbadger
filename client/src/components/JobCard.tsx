@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
-import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users, Truck } from "lucide-react";
+import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users, Truck, UserCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/context-menu";
 
 interface JobCardProps {
-  job: Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator };
+  job: Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator; creator?: { id: string; firstName: string | null; lastName: string | null } | null };
   isOverlay?: boolean;
   compact?: boolean;
   jobIndex?: number;
@@ -153,6 +153,15 @@ export function JobCard({ job, isOverlay, compact, jobIndex, totalJobs, sameLoca
                 Needs assistant
               </span>
             )}
+          </div>
+        )}
+
+        {(job as any).creator && (
+          <div className="flex items-center gap-1 text-[10px] opacity-70" data-testid={`text-created-by-${job.id}`}>
+            <UserCircle className="w-3 h-3 shrink-0" />
+            <span className="line-clamp-1">
+              {[(job as any).creator.firstName, (job as any).creator.lastName].filter(Boolean).join(" ") || "Unknown"}
+            </span>
           </div>
         )}
       </CardContent>

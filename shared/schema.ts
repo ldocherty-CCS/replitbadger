@@ -85,6 +85,7 @@ export const jobs = pgTable("jobs", {
   assistantOperatorId: integer("assistant_operator_id").references(() => operators.id),
   sortOrder: integer("sort_order").default(0),
   seriesId: text("series_id"),
+  createdBy: varchar("created_by").references(() => users.id),
   
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -160,6 +161,7 @@ export type JobResponse = Job & {
   customer?: Customer;
   operator?: Operator;
   assistantOperator?: Operator;
+  creator?: { id: string; firstName: string | null; lastName: string | null } | null;
 };
 
 export type LoginRequest = { username: string; password: string };

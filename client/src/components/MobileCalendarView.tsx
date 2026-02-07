@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { format, addDays, startOfWeek, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Loader2, GripVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, GripVertical, Plus, PauseCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useJobs } from "@/hooks/use-jobs";
 import { useUpdateJob } from "@/hooks/use-jobs";
@@ -9,6 +9,8 @@ import { useTimeOff } from "@/hooks/use-time-off";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Job, Operator } from "@shared/schema";
+import { CreateJobDialog } from "./CreateJobDialog";
+import { PlaceHoldDialog } from "./PlaceHoldDialog";
 import {
   DndContext,
   DragOverlay,
@@ -80,11 +82,15 @@ function MobileDropCell({
   operatorId,
   date,
   isOff,
+  isEmpty,
+  onTapEmpty,
   children,
 }: {
   operatorId: number;
   date: string;
   isOff: boolean;
+  isEmpty: boolean;
+  onTapEmpty?: (operatorId: number, date: string) => void;
   children: React.ReactNode;
 }) {
   const droppableId = `mobile-drop-${operatorId}-${date}`;
@@ -93,13 +99,21 @@ function MobileDropCell({
     data: { operatorId, date, type: "schedule" },
   });
 
+  const handleClick = () => {
+    if (isEmpty && !isOff && onTapEmpty) {
+      onTapEmpty(operatorId, date);
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
+      onClick={handleClick}
       className={cn(
         "min-h-[36px] border-r last:border-r-0 p-0.5 flex flex-col gap-0.5 transition-colors",
         isOff && "bg-red-100/60 dark:bg-red-950/30",
-        isOver && "bg-primary/10 ring-1 ring-inset ring-primary/30"
+        isOver && "bg-primary/10 ring-1 ring-inset ring-primary/30",
+        isEmpty && !isOff && "cursor-pointer"
       )}
       data-testid={`mobile-cell-${operatorId}-${date}`}
     >
@@ -127,6 +141,10 @@ function DragOverlayContent({ job }: { job: Job & { customer?: { name: string } 
 export function MobileCalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeDragJob, setActiveDragJob] = useState<(Job & { customer?: { name: string } }) | null>(null);
+  const [actionSheet, setActionSheet] = useState<{ operatorId: number; date: string } | null>(null);
+  const [createJobOpen, setCreateJobOpen] = useState(false);
+  const [holdOpen, setHoldOpen] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<{ operatorId: number; date: string } | null>(null);
 
   const startDate = startOfWeek(currentDate, { weekStartsOn: 0 });
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -245,6 +263,21 @@ export function MobileCalendarView() {
     });
     return groups;
   }, [operators]);
+
+  const handleTapEmpty = useCallback((operatorId: number, date: string) => {
+    setSelectedCell({ operatorId, date });
+    setActionSheet({ operatorId, date });
+  }, []);
+
+  const handleCreateJob = () => {
+    setActionSheet(null);
+    setCreateJobOpen(true);
+  };
+
+  const handleQuickHold = () => {
+    setActionSheet(null);
+    setHoldOpen(true);
+  };
 
   const handleDragStart = (event: DragStartEvent) => {
     const job = event.active.data.current?.job;
@@ -418,6 +451,8 @@ export function MobileCalendarView() {
                           operatorId={operator.id}
                           date={day.iso}
                           isOff={isOff}
+                          isEmpty={cellJobs.length === 0}
+                          onTapEmpty={handleTapEmpty}
                         >
                           {isOff && cellJobs.length === 0 && (
                             <div className="flex-1 flex items-center justify-center">
@@ -441,6 +476,69 @@ export function MobileCalendarView() {
       <DragOverlay dropAnimation={null}>
         {activeDragJob ? <DragOverlayContent job={activeDragJob as any} /> : null}
       </DragOverlay>
+
+      {actionSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          onClick={() => setActionSheet(null)}
+          data-testid="mobile-action-sheet-backdrop"
+        >
+          <div
+            className="w-full max-w-sm bg-card border-t rounded-t-xl shadow-lg p-4 pb-6 space-y-2 animate-in slide-in-from-bottom-4 duration-200"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="mobile-action-sheet"
+          >
+            <div className="flex justify-center mb-2">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            <p className="text-xs text-muted-foreground text-center mb-3">
+              {operators?.find((o) => o.id === actionSheet.operatorId)?.name} &mdash;{" "}
+              {format(parseISO(actionSheet.date), "EEE, MMM d")}
+            </p>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3"
+              onClick={handleCreateJob}
+              data-testid="button-mobile-new-job"
+            >
+              <Plus className="w-4 h-4" />
+              New Job
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3"
+              onClick={handleQuickHold}
+              data-testid="button-mobile-quick-hold"
+            >
+              <PauseCircle className="w-4 h-4" />
+              Quick Hold
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {selectedCell && (
+        <>
+          <CreateJobDialog
+            open={createJobOpen}
+            onOpenChange={(open) => {
+              setCreateJobOpen(open);
+              if (!open) setSelectedCell(null);
+            }}
+            defaultOperatorId={selectedCell.operatorId}
+            defaultDate={selectedCell.date}
+          />
+          <PlaceHoldDialog
+            open={holdOpen}
+            onOpenChange={(open) => {
+              setHoldOpen(open);
+              if (!open) setSelectedCell(null);
+            }}
+            date={selectedCell.date}
+            operatorId={selectedCell.operatorId}
+          />
+        </>
+      )}
     </DndContext>
   );
 }

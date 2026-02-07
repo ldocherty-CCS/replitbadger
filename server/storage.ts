@@ -116,8 +116,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Jobs
-  async getJobs(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator })[]> {
+  async getJobs(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator; creator?: { id: string; firstName: string | null; lastName: string | null } | null })[]> {
     const assistantOperators = aliasedTable(operators, "assistant_operators");
+    const creatorUsers = aliasedTable(users, "creator_users");
     let query = db.select({
       id: jobs.id,
       customerId: jobs.customerId,
@@ -140,15 +141,22 @@ export class DatabaseStorage implements IStorage {
       assistantOperatorId: jobs.assistantOperatorId,
       sortOrder: jobs.sortOrder,
       seriesId: jobs.seriesId,
+      createdBy: jobs.createdBy,
       createdAt: jobs.createdAt,
       customer: customers,
       operator: operators,
       assistantOperator: assistantOperators,
+      creator: {
+        id: creatorUsers.id,
+        firstName: creatorUsers.firstName,
+        lastName: creatorUsers.lastName,
+      },
     })
     .from(jobs)
     .leftJoin(customers, eq(jobs.customerId, customers.id))
     .leftJoin(operators, eq(jobs.operatorId, operators.id))
-    .leftJoin(assistantOperators, eq(jobs.assistantOperatorId, assistantOperators.id));
+    .leftJoin(assistantOperators, eq(jobs.assistantOperatorId, assistantOperators.id))
+    .leftJoin(creatorUsers, eq(jobs.createdBy, creatorUsers.id));
 
     const conditions = [];
     if (filters?.startDate) {
@@ -174,6 +182,7 @@ export class DatabaseStorage implements IStorage {
       customer: row.customer || undefined,
       operator: row.operator || undefined,
       assistantOperator: row.assistantOperator || undefined,
+      creator: row.creator?.id ? row.creator : null,
     }));
   }
 

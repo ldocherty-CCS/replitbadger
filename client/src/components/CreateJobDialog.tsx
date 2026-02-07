@@ -95,8 +95,11 @@ export function CreateJobDialog({
     if (initialData) {
       form.reset({
         ...initialData,
+        customerId: initialData.customerId ?? undefined,
+        operatorId: initialData.operatorId ?? undefined,
+        assistantOperatorId: initialData.assistantOperatorId ?? undefined,
         scheduledDate: initialData.scheduledDate,
-      });
+      } as any);
       setIsMultiDay(false);
       setEndDate("");
     } else {
