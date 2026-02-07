@@ -84,6 +84,20 @@ export const jobs = pgTable("jobs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const operatorQualifications = pgTable("operator_qualifications", {
+  id: serial("id").primaryKey(),
+  operatorId: integer("operator_id").references(() => operators.id, { onDelete: "cascade" }).notNull(),
+  qualificationId: integer("qualification_id").references(() => qualifications.id, { onDelete: "cascade" }).notNull(),
+  status: text("status").default("active").notNull(),
+  issueDate: date("issue_date"),
+  expirationDate: date("expiration_date"),
+  documentUrl: text("document_url"),
+  documentName: text("document_name"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // === SCHEMAS ===
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
@@ -91,6 +105,7 @@ export const insertOperatorSchema = createInsertSchema(operators).omit({ id: tru
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertQualificationSchema = createInsertSchema(qualifications).omit({ id: true, createdAt: true });
+export const insertOperatorQualificationSchema = createInsertSchema(operatorQualifications).omit({ id: true, createdAt: true, updatedAt: true });
 
 // === EXPLICIT API TYPES ===
 
@@ -99,12 +114,19 @@ export type Operator = typeof operators.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
 export type Qualification = typeof qualifications.$inferSelect;
+export type OperatorQualification = typeof operatorQualifications.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertOperator = z.infer<typeof insertOperatorSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type InsertQualification = z.infer<typeof insertQualificationSchema>;
+export type InsertOperatorQualification = z.infer<typeof insertOperatorQualificationSchema>;
+
+export type OperatorQualificationWithDetails = OperatorQualification & {
+  operator?: Operator;
+  qualification?: Qualification;
+};
 
 // API Request/Response Types
 export type CreateOperatorRequest = InsertOperator;
