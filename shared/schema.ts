@@ -80,6 +80,7 @@ export const jobs = pgTable("jobs", {
   // Requirements
   siteQuals: text("site_quals").array(),
   additionalOperatorNeeded: boolean("additional_operator_needed").default(false),
+  assistantOperatorId: integer("assistant_operator_id").references(() => operators.id),
   
   createdAt: timestamp("created_at").defaultNow(),
 });
