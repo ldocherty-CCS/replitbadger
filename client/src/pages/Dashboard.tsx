@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import {
@@ -18,7 +18,7 @@ import { useJobs, useUpdateJob, useDeleteJob, useDuplicateJob } from "@/hooks/us
 import { useOperators } from "@/hooks/use-operators";
 import { JobCard } from "@/components/JobCard";
 import { CreateJobDialog } from "@/components/CreateJobDialog";
-import { ChevronLeft, ChevronRight, Plus, ChevronDown, ChevronUp, Loader2, MapPin, Truck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { DroppableDay } from "@/components/DroppableDay";
@@ -115,12 +115,96 @@ function DayCell({
   );
 }
 
+function AvailabilityChart({
+  weekDays,
+  jobs,
+  operators,
+}: {
+  weekDays: { date: Date; iso: string; label: string }[];
+  jobs: Job[] | undefined;
+  operators: Operator[] | undefined;
+}) {
+  const totalTrucks = operators?.length || 0;
+
+  const dayStats = weekDays.map((day) => {
+    const dayJobs = jobs?.filter((j) => j.scheduledDate === day.iso) || [];
+    const uniqueOperatorsBooked = new Set(dayJobs.map((j) => j.operatorId).filter(Boolean));
+    const booked = uniqueOperatorsBooked.size;
+    const available = Math.max(0, totalTrucks - booked);
+    const overbooked = dayJobs.length > totalTrucks;
+    const overbookedCount = dayJobs.length - totalTrucks;
+    return { ...day, booked, available, overbooked, overbookedCount, totalJobs: dayJobs.length };
+  });
+
+  const maxJobs = Math.max(totalTrucks, ...dayStats.map((d) => d.totalJobs), 1);
+
+  return (
+    <div className="border-t bg-card px-4 py-3" data-testid="availability-chart">
+      <div className="flex items-center gap-2 mb-2">
+        <Truck className="w-4 h-4 text-primary" />
+        <span className="text-sm font-semibold">Truck Availability</span>
+        <span className="text-xs text-muted-foreground">({totalTrucks} total trucks)</span>
+      </div>
+      <div className="flex gap-2 items-end h-20">
+        {dayStats.map((day) => {
+          const barHeight = Math.max(8, (day.totalJobs / maxJobs) * 100);
+          const capacityLine = (totalTrucks / maxJobs) * 100;
+
+          return (
+            <div key={day.iso} className="flex-1 flex flex-col items-center gap-1" data-testid={`availability-day-${day.iso}`}>
+              <div className="relative w-full flex flex-col items-center" style={{ height: "64px" }}>
+                <div
+                  className="absolute bottom-0 w-full max-w-[48px] rounded-md transition-all duration-300"
+                  style={{
+                    height: `${barHeight}%`,
+                    background: day.overbooked
+                      ? "hsl(0, 84%, 60%)"
+                      : day.available === 0
+                        ? "hsl(40, 96%, 50%)"
+                        : "hsl(var(--primary))",
+                    opacity: day.overbooked ? 1 : 0.8,
+                  }}
+                  data-testid={`bar-${day.iso}`}
+                />
+                {totalTrucks > 0 && (
+                  <div
+                    className="absolute w-full border-t-2 border-dashed border-muted-foreground/40"
+                    style={{ bottom: `${capacityLine}%` }}
+                  />
+                )}
+              </div>
+              <div className="text-center mt-1">
+                <div className={cn(
+                  "text-xs font-bold leading-tight",
+                  day.overbooked ? "text-destructive" : day.available === 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
+                )}>
+                  {day.overbooked ? (
+                    <span>{day.overbookedCount} over</span>
+                  ) : (
+                    <span>{day.available} free</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-muted-foreground leading-tight">
+                  {format(day.date, "EEE")}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [activeDragJob, setActiveDragJob] = useState<Job | null>(null);
-  const [mapExpanded, setMapExpanded] = useState(true);
+  const [mapVisible, setMapVisible] = useState(true);
+  const [splitPercent, setSplitPercent] = useState(65);
+  const isDraggingSplit = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   const updateJob = useUpdateJob();
   const deleteJob = useDeleteJob();
@@ -188,36 +272,66 @@ export default function Dashboard() {
     updateJob.mutate({ id: job.id, status });
   }, [updateJob]);
 
+  const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingSplit.current = true;
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingSplit.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setSplitPercent(Math.min(85, Math.max(30, pct)));
+    };
+
+    const handleMouseUp = () => {
+      isDraggingSplit.current = false;
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, []);
+
   useEffect(() => {
-    if (!mapExpanded || !mapRef.current) return;
-
-    if (!leafletMap.current) {
-      leafletMap.current = L.map(mapRef.current, {
-        center: DEFAULT_CENTER,
-        zoom: 10,
-        zoomControl: true,
-      });
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
-      }).addTo(leafletMap.current);
-
-      markersLayer.current = L.layerGroup().addTo(leafletMap.current);
-    }
-
-    setTimeout(() => {
-      leafletMap.current?.invalidateSize();
-    }, 100);
-
-    return () => {
-      if (!mapExpanded && leafletMap.current) {
+    if (!mapVisible) {
+      if (leafletMap.current) {
         leafletMap.current.remove();
         leafletMap.current = null;
         markersLayer.current = null;
       }
-    };
-  }, [mapExpanded]);
+      return;
+    }
+
+    if (!mapRef.current) return;
+
+    leafletMap.current = L.map(mapRef.current, {
+      center: DEFAULT_CENTER,
+      zoom: 10,
+      zoomControl: true,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(leafletMap.current);
+
+    markersLayer.current = L.layerGroup().addTo(leafletMap.current);
+
+    setTimeout(() => {
+      leafletMap.current?.invalidateSize();
+    }, 200);
+  }, [mapVisible]);
+
+  useEffect(() => {
+    if (leafletMap.current) {
+      setTimeout(() => leafletMap.current?.invalidateSize(), 50);
+    }
+  }, [splitPercent]);
 
   useEffect(() => {
     if (!leafletMap.current || !markersLayer.current) return;
@@ -305,7 +419,7 @@ export default function Dashboard() {
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-muted/30">
-      <div className="px-6 py-4 flex items-center justify-between gap-4 border-b bg-card">
+      <div className="px-6 py-3 flex items-center justify-between gap-4 border-b bg-card">
         <div className="flex items-center gap-4 flex-wrap">
           <h1 className="text-2xl font-display font-bold text-foreground">
             Scheduling Board
@@ -330,12 +444,11 @@ export default function Dashboard() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setMapExpanded(!mapExpanded)}
+            onClick={() => setMapVisible(!mapVisible)}
             data-testid="button-toggle-map"
           >
-            <MapPin className="w-4 h-4 mr-2" />
+            {mapVisible ? <PanelRightClose className="w-4 h-4 mr-2" /> : <PanelRightOpen className="w-4 h-4 mr-2" />}
             Map
-            {mapExpanded ? <ChevronDown className="w-4 h-4 ml-1" /> : <ChevronUp className="w-4 h-4 ml-1" />}
           </Button>
           <Button onClick={() => { setSelectedJob(null); setIsCreateOpen(true); }} className="shadow-lg shadow-primary/20" data-testid="button-new-job">
             <Plus className="w-4 h-4 mr-2" />
@@ -349,64 +462,117 @@ export default function Dashboard() {
         onDragStart={handleDragStart} 
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <div className="flex border-b bg-muted/50">
-            <div className="w-48 shrink-0 p-4 font-semibold text-sm border-r bg-muted/50 sticky left-0 z-10 flex items-center">
-              Operators
-            </div>
-            {weekDays.map((day) => (
-              <div 
-                key={day.iso} 
-                className={cn(
-                  "flex-1 min-w-[180px] p-3 text-center border-r last:border-r-0",
-                  day.iso === format(new Date(), "yyyy-MM-dd") && "bg-blue-50/50 dark:bg-blue-900/10"
-                )}
-              >
-                <div className="font-semibold text-sm">{day.label}</div>
+        <div ref={containerRef} className="flex-1 overflow-hidden flex">
+          <div
+            className="flex flex-col overflow-hidden"
+            style={{ width: mapVisible ? `${splitPercent}%` : "100%" }}
+          >
+            <div className="flex border-b bg-muted/50">
+              <div className="w-48 shrink-0 p-4 font-semibold text-sm border-r bg-muted/50 sticky left-0 z-10 flex items-center">
+                Operators
               </div>
-            ))}
-          </div>
+              {weekDays.map((day) => (
+                <div 
+                  key={day.iso} 
+                  className={cn(
+                    "flex-1 min-w-[140px] p-3 text-center border-r last:border-r-0",
+                    day.iso === format(new Date(), "yyyy-MM-dd") && "bg-primary/5"
+                  )}
+                >
+                  <div className="font-semibold text-sm">{day.label}</div>
+                </div>
+              ))}
+            </div>
 
-          <ScrollArea className="flex-1 custom-scrollbar">
-            <div className="min-w-fit">
-              {operators?.map((operator) => (
-                <div key={operator.id} className="flex border-b last:border-b-0">
-                  <div className="w-48 shrink-0 p-3 border-r bg-card sticky left-0 z-10 flex flex-col justify-center group hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-2 h-8 rounded-full shrink-0" 
-                        style={{ backgroundColor: operator.color || '#3b82f6' }} 
-                      />
-                      <div>
-                        <div className="font-bold text-sm leading-tight">{operator.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{operator.groupName}</div>
+            <ScrollArea className="flex-1 custom-scrollbar">
+              <div className="min-w-fit">
+                {operators?.map((operator) => (
+                  <div key={operator.id} className="flex border-b last:border-b-0">
+                    <div className="w-48 shrink-0 p-3 border-r bg-card sticky left-0 z-10 flex flex-col justify-center group hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-2 h-8 rounded-full shrink-0" 
+                          style={{ backgroundColor: operator.color || '#3b82f6' }} 
+                        />
+                        <div>
+                          <div className="font-bold text-sm leading-tight">{operator.name}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{operator.groupName}</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {weekDays.map((day) => {
-                    const key = `${operator.id}-${day.iso}`;
-                    const cellJobs = jobsMap[key] || [];
-                    
+                    {weekDays.map((day) => {
+                      const key = `${operator.id}-${day.iso}`;
+                      const cellJobs = jobsMap[key] || [];
+                      
+                      return (
+                        <div key={day.iso} className="flex-1 min-w-[140px]">
+                          <DayCell 
+                            date={day.iso} 
+                            operatorId={operator.id} 
+                            jobs={cellJobs}
+                            onJobClick={(job) => { setSelectedJob(job); setIsCreateOpen(true); }}
+                            onDuplicate={handleDuplicate}
+                            onDelete={handleDelete}
+                            onStatusChange={handleStatusChange}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </div>
+
+          {mapVisible && (
+            <>
+              <div
+                className="w-1.5 bg-border hover:bg-primary/30 cursor-col-resize flex-shrink-0 relative group transition-colors"
+                onMouseDown={handleSplitMouseDown}
+                data-testid="panel-resizer"
+              >
+                <div className="absolute inset-y-0 -left-1 -right-1" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-8 rounded-full bg-muted-foreground/30 group-hover:bg-primary/60 transition-colors" />
+              </div>
+
+              <div
+                className="flex flex-col overflow-hidden border-l"
+                style={{ width: `${100 - splitPercent}%` }}
+                data-testid="map-panel"
+              >
+                <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-semibold">Map</span>
+                    <span className="text-xs text-muted-foreground">
+                      {jobsWithCoords} job{jobsWithCoords !== 1 ? "s" : ""}
+                    </span>
+                    {truckMarkers > 0 && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Truck className="w-3 h-3" />
+                        {truckMarkers}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div ref={mapRef} className="flex-1" data-testid="map-container" />
+                <div className="px-3 py-1.5 border-t bg-muted/20 flex flex-wrap gap-x-3 gap-y-1 shrink-0">
+                  {Object.entries(STATUS_COLORS).map(([key, val]) => {
+                    const count = jobs?.filter((j: any) => j.status === key && j.lat != null).length || 0;
+                    if (count === 0) return null;
                     return (
-                      <div key={day.iso} className="flex-1 min-w-[180px]">
-                        <DayCell 
-                          date={day.iso} 
-                          operatorId={operator.id} 
-                          jobs={cellJobs}
-                          onJobClick={(job) => { setSelectedJob(job); setIsCreateOpen(true); }}
-                          onDuplicate={handleDuplicate}
-                          onDelete={handleDelete}
-                          onStatusChange={handleStatusChange}
-                        />
+                      <div key={key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <div className="w-2 h-2 rounded-full" style={{ background: val.hex }} />
+                        <span>{val.label} ({count})</span>
                       </div>
                     );
                   })}
                 </div>
-              ))}
-            </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
+              </div>
+            </>
+          )}
         </div>
 
         <DragOverlay>
@@ -418,38 +584,7 @@ export default function Dashboard() {
         </DragOverlay>
       </DndContext>
 
-      {mapExpanded && (
-        <div className="border-t bg-card" data-testid="map-panel">
-          <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
-            <div className="flex items-center gap-3">
-              <MapPin className="w-4 h-4 text-primary" />
-              <span className="text-sm font-semibold">Job Map</span>
-              <span className="text-xs text-muted-foreground">
-                {jobsWithCoords} job{jobsWithCoords !== 1 ? "s" : ""} mapped
-              </span>
-              {truckMarkers > 0 && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Truck className="w-3 h-3" />
-                  {truckMarkers} truck{truckMarkers !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {Object.entries(STATUS_COLORS).map(([key, val]) => {
-                const count = jobs?.filter((j: any) => j.status === key && j.lat != null).length || 0;
-                if (count === 0) return null;
-                return (
-                  <div key={key} className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: val.hex }} />
-                    <span>{val.label} ({count})</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <div ref={mapRef} className="h-[300px] w-full" data-testid="map-container" />
-        </div>
-      )}
+      <AvailabilityChart weekDays={weekDays} jobs={jobs} operators={operators} />
 
       <CreateJobDialog 
         open={isCreateOpen} 
