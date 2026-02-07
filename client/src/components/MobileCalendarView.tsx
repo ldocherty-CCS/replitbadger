@@ -1,12 +1,29 @@
-import { useState, useMemo } from "react";
-import { format, addDays, startOfWeek } from "date-fns";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { format, addDays, startOfWeek, parseISO } from "date-fns";
+import { ChevronLeft, ChevronRight, Loader2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useJobs } from "@/hooks/use-jobs";
+import { useUpdateJob } from "@/hooks/use-jobs";
 import { useOperators } from "@/hooks/use-operators";
 import { useTimeOff } from "@/hooks/use-time-off";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Job, Operator } from "@shared/schema";
+import {
+  DndContext,
+  DragOverlay,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  TouchSensor,
+  PointerSensor,
+  pointerWithin,
+  closestCenter,
+  type DragEndEvent,
+  type DragStartEvent,
+  type CollisionDetection,
+} from "@dnd-kit/core";
 
 const STATUS_COLORS: Record<string, string> = {
   dispatched: "#22c55e",
@@ -28,8 +45,88 @@ function getContrastText(hex: string): string {
   return luminance > 0.5 ? "#000" : "#fff";
 }
 
+function MobileDraggableJob({ job }: { job: Job & { customer?: { name: string } } }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `mobile-job-${job.id}`,
+    data: { job },
+  });
+
+  const bg = STATUS_COLORS[job.status] || "#9ca3af";
+  const fg = getContrastText(bg);
+  const customerName = job.customer?.name || "";
+  const truncName = customerName.length > 8 ? customerName.slice(0, 7) : customerName;
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={cn(
+        "rounded-[3px] px-0.5 py-px leading-none overflow-hidden flex items-center gap-0.5 touch-none",
+        isDragging && "opacity-40"
+      )}
+      style={{ background: bg, color: fg }}
+      data-testid={`mobile-job-${job.id}`}
+    >
+      <GripVertical className="w-2 h-2 shrink-0 opacity-60" />
+      <span className="text-[9px] font-semibold block truncate">
+        {truncName}
+      </span>
+    </div>
+  );
+}
+
+function MobileDropCell({
+  operatorId,
+  date,
+  isOff,
+  children,
+}: {
+  operatorId: number;
+  date: string;
+  isOff: boolean;
+  children: React.ReactNode;
+}) {
+  const droppableId = `mobile-drop-${operatorId}-${date}`;
+  const { setNodeRef, isOver } = useDroppable({
+    id: droppableId,
+    data: { operatorId, date, type: "schedule" },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "min-h-[36px] border-r last:border-r-0 p-0.5 flex flex-col gap-0.5 transition-colors",
+        isOff && "bg-red-100/60 dark:bg-red-950/30",
+        isOver && "bg-primary/10 ring-1 ring-inset ring-primary/30"
+      )}
+      data-testid={`mobile-cell-${operatorId}-${date}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DragOverlayContent({ job }: { job: Job & { customer?: { name: string } } }) {
+  const bg = STATUS_COLORS[job.status] || "#9ca3af";
+  const fg = getContrastText(bg);
+  const customerName = job.customer?.name || "";
+
+  return (
+    <div
+      className="rounded px-1.5 py-1 shadow-lg leading-none flex items-center gap-1 opacity-90"
+      style={{ background: bg, color: fg, minWidth: 60 }}
+    >
+      <GripVertical className="w-3 h-3 shrink-0" />
+      <span className="text-[10px] font-bold truncate">{customerName}</span>
+    </div>
+  );
+}
+
 export function MobileCalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [activeDragJob, setActiveDragJob] = useState<(Job & { customer?: { name: string } }) | null>(null);
 
   const startDate = startOfWeek(currentDate, { weekStartsOn: 0 });
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -52,6 +149,19 @@ export function MobileCalendarView() {
     startDate: weekDays[0].iso,
     endDate: weekDays[6].iso,
   });
+
+  const updateJob = useUpdateJob();
+  const { toast } = useToast();
+
+  const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
+  const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } });
+  const sensors = useSensors(pointerSensor, touchSensor);
+
+  const collisionStrategy: CollisionDetection = useCallback((args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) return pointerCollisions;
+    return closestCenter(args);
+  }, []);
 
   const prevWeek = () => setCurrentDate(addDays(currentDate, -7));
   const nextWeek = () => setCurrentDate(addDays(currentDate, 7));
@@ -117,6 +227,65 @@ export function MobileCalendarView() {
 
   const todayIso = format(new Date(), "yyyy-MM-dd");
 
+  const groupedOperators = useMemo(() => {
+    if (!operators) return [];
+    const sorted = operators.slice().sort((a, b) => {
+      if (a.groupName !== b.groupName) return (a.groupName || "").localeCompare(b.groupName || "");
+      return a.name.localeCompare(b.name);
+    });
+    const groups: { name: string; operators: Operator[] }[] = [];
+    let currentGroup = "";
+    sorted.forEach((op) => {
+      const g = op.groupName || "Other";
+      if (g !== currentGroup) {
+        currentGroup = g;
+        groups.push({ name: g, operators: [] });
+      }
+      groups[groups.length - 1].operators.push(op);
+    });
+    return groups;
+  }, [operators]);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const job = event.active.data.current?.job;
+    if (job) setActiveDragJob(job);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveDragJob(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const job = active.data.current?.job;
+    const dropData = over.data.current;
+    if (!job || !dropData) return;
+
+    const { operatorId, date: dateStr } = dropData;
+
+    if (operatorId && dateStr && operatorOffDays.has(`${operatorId}-${dateStr}`)) {
+      const opName = operators?.find((o: any) => o.id === operatorId)?.name || "This operator";
+      toast({
+        title: "Cannot Schedule",
+        description: `${opName} has the day off on ${format(parseISO(dateStr), "EEE M/d")}. Remove their time off first.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (job.operatorId === operatorId && job.scheduledDate === dateStr) return;
+
+    const targetKey = `${operatorId}-${dateStr}`;
+    const existingJobs = jobsMap[targetKey] || [];
+    const maxSort = existingJobs.reduce((max: number, j: Job) => Math.max(max, j.sortOrder ?? 0), 0);
+
+    await updateJob.mutateAsync({
+      id: job.id,
+      operatorId,
+      scheduledDate: dateStr,
+      sortOrder: maxSort + 1,
+    });
+  };
+
   if (jobsLoading || opsLoading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -125,156 +294,153 @@ export function MobileCalendarView() {
     );
   }
 
-  const sortedOperators = operators?.slice().sort((a, b) => {
-    if (a.groupName !== b.groupName) return (a.groupName || "").localeCompare(b.groupName || "");
-    return a.name.localeCompare(b.name);
-  });
-
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-background" data-testid="mobile-calendar-view">
-      <div className="flex items-center justify-between px-3 py-2 border-b bg-card shrink-0">
-        <Button variant="ghost" size="icon" onClick={prevWeek} data-testid="mobile-prev-week">
-          <ChevronLeft className="w-5 h-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={goToday}
-          className="text-sm font-semibold"
-          data-testid="mobile-today"
-        >
-          {format(startDate, "MMM yyyy")}
-        </Button>
-        <Button variant="ghost" size="icon" onClick={nextWeek} data-testid="mobile-next-week">
-          <ChevronRight className="w-5 h-5" />
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-7 border-b bg-muted/50 shrink-0" data-testid="mobile-day-headers">
-        {dayStats.map((day) => (
-          <div
-            key={day.iso}
-            className={cn(
-              "flex flex-col items-center py-1.5",
-              day.iso === todayIso && "relative"
-            )}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={collisionStrategy}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex flex-col h-[calc(100vh-4rem)] bg-background" data-testid="mobile-calendar-view">
+        <div className="flex items-center justify-between px-3 py-2 border-b bg-card shrink-0">
+          <Button variant="ghost" size="icon" onClick={prevWeek} data-testid="mobile-prev-week">
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={goToday}
+            className="text-sm font-semibold"
+            data-testid="mobile-today"
           >
-            <span className="text-[10px] font-medium text-muted-foreground uppercase">
-              {day.dayLetter}
-            </span>
-            <span
+            {format(startDate, "MMM yyyy")}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={nextWeek} data-testid="mobile-next-week">
+            <ChevronRight className="w-5 h-5" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-7 border-b bg-muted/50 shrink-0" data-testid="mobile-day-headers">
+          {dayStats.map((day) => (
+            <div
+              key={day.iso}
               className={cn(
-                "text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full",
-                day.iso === todayIso && "bg-primary text-primary-foreground"
+                "flex flex-col items-center py-1.5",
+                day.iso === todayIso && "relative"
               )}
             >
-              {day.dayNum}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 border-b bg-card shrink-0" data-testid="mobile-capacity-chart">
-        {dayStats.map((day) => {
-          const ratio = day.effective > 0 ? day.available / day.effective : 0;
-          const barColor = day.overbooked
-            ? "hsl(0, 84%, 60%)"
-            : day.available === 0
-              ? "hsl(40, 96%, 50%)"
-              : "hsl(142, 71%, 45%)";
-
-          return (
-            <div key={day.iso} className="flex flex-col items-center px-0.5 py-1.5">
-              <div className="relative w-full h-6 flex items-end justify-center">
-                <div
-                  className="w-full max-w-[28px] rounded-sm transition-all duration-300"
-                  style={{
-                    height: `${day.overbooked ? 100 : Math.max(12, ratio * 100)}%`,
-                    background: barColor,
-                    opacity: 0.85,
-                  }}
-                />
-              </div>
+              <span className="text-[10px] font-medium text-muted-foreground uppercase">
+                {day.dayLetter}
+              </span>
               <span
                 className={cn(
-                  "text-[9px] font-bold mt-0.5 leading-tight",
-                  day.overbooked
-                    ? "text-destructive"
-                    : day.available === 0
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-foreground"
+                  "text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full",
+                  day.iso === todayIso && "bg-primary text-primary-foreground"
                 )}
               >
-                {day.overbooked ? `${day.overbookedCount}+` : `${day.available}/${day.effective}`}
+                {day.dayNum}
               </span>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
 
-      <div className="flex-1 overflow-auto" data-testid="mobile-schedule-grid">
-        <div className="min-w-0">
-          {sortedOperators?.map((operator) => {
+        <div className="grid grid-cols-7 border-b bg-card shrink-0" data-testid="mobile-capacity-chart">
+          {dayStats.map((day) => {
+            const ratio = day.effective > 0 ? day.available / day.effective : 0;
+            const barColor = day.overbooked
+              ? "hsl(0, 84%, 60%)"
+              : day.available === 0
+                ? "hsl(40, 96%, 50%)"
+                : "hsl(142, 71%, 45%)";
+
             return (
-              <div
-                key={operator.id}
-                className="grid border-b last:border-b-0"
-                style={{ gridTemplateColumns: "minmax(64px, auto) repeat(7, 1fr)" }}
-                data-testid={`mobile-row-${operator.id}`}
-              >
-                <div className="px-1.5 py-1 flex items-center border-r bg-muted/30 sticky left-0 z-10">
-                  <span className="text-[11px] font-semibold leading-tight truncate">
-                    {operator.name.split(" ").map(n => n.slice(0, 6)).join(" ")}
-                  </span>
+              <div key={day.iso} className="flex flex-col items-center px-0.5 py-1.5">
+                <div className="relative w-full h-6 flex items-end justify-center">
+                  <div
+                    className="w-full max-w-[28px] rounded-sm transition-all duration-300"
+                    style={{
+                      height: `${day.overbooked ? 100 : Math.max(12, ratio * 100)}%`,
+                      background: barColor,
+                      opacity: 0.85,
+                    }}
+                  />
                 </div>
-                {weekDays.map((day) => {
-                  const key = `${operator.id}-${day.iso}`;
-                  const cellJobs = jobsMap[key] || [];
-                  const isOff = operatorOffDays.has(key);
-
-                  return (
-                    <div
-                      key={day.iso}
-                      className={cn(
-                        "min-h-[36px] border-r last:border-r-0 p-0.5 flex flex-col gap-0.5",
-                        isOff && "bg-red-100/60 dark:bg-red-950/30"
-                      )}
-                      data-testid={`mobile-cell-${operator.id}-${day.iso}`}
-                    >
-                      {isOff && cellJobs.length === 0 && (
-                        <div className="flex-1 flex items-center justify-center">
-                          <span className="text-[8px] font-bold text-red-400 uppercase">OFF</span>
-                        </div>
-                      )}
-                      {cellJobs.map((job) => {
-                        const bg = STATUS_COLORS[job.status] || "#9ca3af";
-                        const fg = getContrastText(bg);
-                        const customerName = (job as any).customer?.name || "";
-                        const truncName = customerName.length > 8
-                          ? customerName.slice(0, 7)
-                          : customerName;
-
-                        return (
-                          <div
-                            key={job.id}
-                            className="rounded-[3px] px-0.5 py-px leading-none overflow-hidden"
-                            style={{ background: bg, color: fg }}
-                            data-testid={`mobile-job-${job.id}`}
-                          >
-                            <span className="text-[9px] font-semibold block truncate">
-                              {truncName}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                <span
+                  className={cn(
+                    "text-[9px] font-bold mt-0.5 leading-tight",
+                    day.overbooked
+                      ? "text-destructive"
+                      : day.available === 0
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-foreground"
+                  )}
+                >
+                  {day.overbooked ? `${day.overbookedCount}+` : `${day.available}/${day.effective}`}
+                </span>
               </div>
             );
           })}
         </div>
+
+        <div className="flex-1 overflow-auto" data-testid="mobile-schedule-grid">
+          <div className="min-w-0">
+            {groupedOperators.map((group) => (
+              <div key={group.name}>
+                <div
+                  className="sticky left-0 z-20 px-2 py-1 bg-muted border-b border-t"
+                  style={{ gridColumn: "1 / -1" }}
+                  data-testid={`mobile-group-${group.name}`}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    {group.name}
+                  </span>
+                </div>
+                {group.operators.map((operator) => (
+                  <div
+                    key={operator.id}
+                    className="grid border-b last:border-b-0"
+                    style={{ gridTemplateColumns: "minmax(64px, auto) repeat(7, 1fr)" }}
+                    data-testid={`mobile-row-${operator.id}`}
+                  >
+                    <div className="px-1.5 py-1 flex items-center border-r bg-muted/30 sticky left-0 z-10">
+                      <span className="text-[11px] font-semibold leading-tight truncate">
+                        {operator.name.split(" ").map(n => n.slice(0, 6)).join(" ")}
+                      </span>
+                    </div>
+                    {weekDays.map((day) => {
+                      const key = `${operator.id}-${day.iso}`;
+                      const cellJobs = jobsMap[key] || [];
+                      const isOff = operatorOffDays.has(key);
+
+                      return (
+                        <MobileDropCell
+                          key={day.iso}
+                          operatorId={operator.id}
+                          date={day.iso}
+                          isOff={isOff}
+                        >
+                          {isOff && cellJobs.length === 0 && (
+                            <div className="flex-1 flex items-center justify-center">
+                              <span className="text-[8px] font-bold text-red-400 uppercase">OFF</span>
+                            </div>
+                          )}
+                          {cellJobs.map((job) => (
+                            <MobileDraggableJob key={job.id} job={job as any} />
+                          ))}
+                        </MobileDropCell>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </div>
+
+      <DragOverlay dropAnimation={null}>
+        {activeDragJob ? <DragOverlayContent job={activeDragJob as any} /> : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
