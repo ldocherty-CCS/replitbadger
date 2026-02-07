@@ -9,9 +9,10 @@ interface DroppableDayProps {
   className?: string;
 }
 
-export function DroppableDay({ id, children, className }: DroppableDayProps) {
+export function DroppableDay({ id, date, operatorId, children, className }: DroppableDayProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: id,
+    data: { operatorId, date },
   });
 
   return (
