@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { format, addDays, startOfWeek, parseISO } from "date-fns";
-import { ChevronLeft, ChevronRight, Loader2, GripVertical, Plus, PauseCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, GripVertical, Plus, PauseCircle, Navigation, Pencil } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useJobs } from "@/hooks/use-jobs";
 import { useUpdateJob } from "@/hooks/use-jobs";
@@ -48,7 +49,7 @@ function getContrastText(hex: string): string {
   return luminance > 0.5 ? "#000" : "#fff";
 }
 
-function MobileDraggableJob({ job, isAssistantEntry }: { job: Job & { customer?: { name: string } }; isAssistantEntry?: boolean }) {
+function MobileDraggableJob({ job, isAssistantEntry, onTap }: { job: Job & { customer?: { name: string } }; isAssistantEntry?: boolean; onTap?: (job: Job & { customer?: { name: string } }) => void }) {
   const draggableId = isAssistantEntry ? `mobile-job-${job.id}-assist` : `mobile-job-${job.id}`;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: draggableId,
@@ -66,6 +67,12 @@ function MobileDraggableJob({ job, isAssistantEntry }: { job: Job & { customer?:
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      onClick={(e) => {
+        if (!isDragging && onTap) {
+          e.stopPropagation();
+          onTap(job);
+        }
+      }}
       className={cn(
         "rounded px-1 py-0.5 leading-none overflow-hidden flex items-center touch-none w-full",
         isDragging && "opacity-40",
@@ -152,6 +159,8 @@ export function MobileCalendarView() {
   const [createJobOpen, setCreateJobOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{ operatorId: number; date: string } | null>(null);
+  const [viewingJob, setViewingJob] = useState<(Job & { customer?: { name: string } }) | null>(null);
+  const [editJobOpen, setEditJobOpen] = useState(false);
 
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -387,7 +396,8 @@ export function MobileCalendarView() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-7 border-b bg-muted/50 shrink-0" data-testid="mobile-day-headers">
+        <div className="grid border-b bg-muted/50 shrink-0" style={{ gridTemplateColumns: "minmax(56px, 64px) repeat(7, 1fr)" }} data-testid="mobile-day-headers">
+          <div />
           {dayStats.map((day) => (
             <div
               key={day.iso}
@@ -411,13 +421,15 @@ export function MobileCalendarView() {
           ))}
         </div>
 
-        <div className="grid grid-cols-7 border-b bg-card shrink-0" data-testid="mobile-capacity-chart">
+        <div className="grid border-b bg-card shrink-0" style={{ gridTemplateColumns: "minmax(56px, 64px) repeat(7, 1fr)" }} data-testid="mobile-capacity-chart">
+          <div />
           {dayStats.map((day) => {
             const ratio = day.effective > 0 ? day.available / day.effective : 0;
+            const bookedPct = day.effective > 0 ? (day.booked / day.effective) * 100 : 0;
             const barColor = day.overbooked
               ? "hsl(0, 84%, 60%)"
-              : day.available === 0
-                ? "hsl(40, 96%, 50%)"
+              : bookedPct >= 70
+                ? "hsl(38, 92%, 50%)"
                 : "hsl(142, 71%, 45%)";
 
             return (
@@ -437,7 +449,7 @@ export function MobileCalendarView() {
                     "text-[8px] font-bold mt-px leading-tight",
                     day.overbooked
                       ? "text-destructive"
-                      : day.available === 0
+                      : bookedPct >= 70
                         ? "text-amber-600 dark:text-amber-400"
                         : "text-foreground"
                   )}
@@ -515,7 +527,7 @@ export function MobileCalendarView() {
                           {cellJobs.map((job) => {
                             const isAssist = assistantJobIds.has(job.id) && (job as any).assistantOperatorId === operator.id;
                             return (
-                              <MobileDraggableJob key={`${job.id}${isAssist ? '-a' : ''}`} job={job as any} isAssistantEntry={isAssist} />
+                              <MobileDraggableJob key={`${job.id}${isAssist ? '-a' : ''}`} job={job as any} isAssistantEntry={isAssist} onTap={setViewingJob} />
                             );
                           })}
                         </MobileDropCell>
@@ -573,6 +585,133 @@ export function MobileCalendarView() {
             </Button>
           </div>
         </div>
+      )}
+
+      {viewingJob && !editJobOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          onClick={() => setViewingJob(null)}
+          data-testid="mobile-job-detail-backdrop"
+        >
+          <div
+            className="w-full max-w-sm bg-card border-t rounded-t-xl shadow-lg p-4 pb-6 space-y-3 animate-in slide-in-from-bottom-4 duration-200"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="mobile-job-detail-sheet"
+          >
+            <div className="flex justify-center mb-1">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="text-sm font-bold" data-testid="text-job-customer">
+                  {viewingJob.customer?.name || "No Customer"}
+                </h3>
+                <Badge
+                  className="text-[10px] no-default-hover-elevate no-default-active-elevate"
+                  style={{
+                    background: STATUS_COLORS[viewingJob.status] || "#9ca3af",
+                    color: getContrastText(STATUS_COLORS[viewingJob.status] || "#9ca3af"),
+                  }}
+                  data-testid="badge-job-status"
+                >
+                  {viewingJob.status.replace(/_/g, " ")}
+                </Badge>
+              </div>
+
+              {viewingJob.scope && (
+                <p className="text-xs text-muted-foreground" data-testid="text-job-scope">
+                  Scope: {viewingJob.scope}
+                </p>
+              )}
+
+              {viewingJob.address && viewingJob.address !== "TBD" && (
+                <p className="text-xs text-muted-foreground" data-testid="text-job-address">
+                  {viewingJob.address}
+                </p>
+              )}
+
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                {viewingJob.startTime && (
+                  <span data-testid="text-job-time">
+                    {viewingJob.startTime}
+                  </span>
+                )}
+                <span data-testid="text-job-date">
+                  {format(parseISO(viewingJob.scheduledDate), "EEE, MMM d")}
+                </span>
+              </div>
+
+              {viewingJob.operatorId && (
+                <p className="text-xs text-muted-foreground" data-testid="text-job-operator">
+                  Operator: {(() => {
+                    const op = operators?.find((o) => o.id === viewingJob.operatorId);
+                    return op ? formatOperatorFullName(op) : `#${viewingJob.operatorId}`;
+                  })()}
+                </p>
+              )}
+
+              {viewingJob.requestorContact && (
+                <p className="text-xs text-muted-foreground" data-testid="text-job-requestor">
+                  Requestor: {viewingJob.requestorContact}
+                </p>
+              )}
+
+              {viewingJob.onSiteContact && (
+                <p className="text-xs text-muted-foreground" data-testid="text-job-onsite">
+                  On-site: {viewingJob.onSiteContact}
+                </p>
+              )}
+
+              {viewingJob.poNumber && (
+                <p className="text-xs text-muted-foreground" data-testid="text-job-po">
+                  PO: {viewingJob.poNumber}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              {viewingJob.address && viewingJob.address !== "TBD" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-2"
+                  onClick={() => {
+                    const encoded = encodeURIComponent(viewingJob.address!);
+                    window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, "_blank");
+                  }}
+                  data-testid="button-job-navigate"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  Navigate
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-2"
+                onClick={() => {
+                  setEditJobOpen(true);
+                }}
+                data-testid="button-job-edit"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Edit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingJob && editJobOpen && (
+        <CreateJobDialog
+          open={editJobOpen}
+          onOpenChange={(open) => {
+            setEditJobOpen(open);
+            if (!open) setViewingJob(null);
+          }}
+          initialData={viewingJob}
+        />
       )}
 
       {selectedCell && (
