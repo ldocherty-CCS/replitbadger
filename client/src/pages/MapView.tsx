@@ -17,6 +17,7 @@ import { format, addDays, startOfWeek, parseISO, addWeeks } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useGoogleMapsReady } from "@/components/AddressAutocomplete";
+import { formatOperatorFullName } from "@/lib/utils";
 
 function escapeHtml(str: string): string {
   const div = document.createElement("div");
@@ -194,7 +195,7 @@ export default function MapView() {
         },
       });
 
-      const operatorName = escapeHtml(job.operator?.name || "Unassigned");
+      const operatorName = escapeHtml(job.operator ? formatOperatorFullName(job.operator) : "Unassigned");
       const customerName = escapeHtml(job.customer?.name || "Unknown");
       const scopeText = escapeHtml(job.scope || "");
       const addressText = escapeHtml(job.address || "");

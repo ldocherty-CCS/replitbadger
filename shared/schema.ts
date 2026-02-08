@@ -28,7 +28,8 @@ export const users = pgTable("users", {
 
 export const operators = pgTable("operators", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
   email: text("email"),
   phone: text("phone"),
   truckLocation: text("truck_location"),

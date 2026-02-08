@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { format, parseISO } from "date-fns";
+import { formatOperatorFullName } from "@/lib/utils";
 
 const noteSchema = z.object({
   scope: z.string().min(1, "Note is required"),
@@ -82,7 +83,7 @@ export function DispatchNoteDialog({ open, onOpenChange, date, operatorId, editJ
           </DialogTitle>
           {operator && date && (
             <p className="text-sm text-muted-foreground mt-1">
-              {operator.name} — {date ? format(parseISO(date), "EEE, MMM d") : ""}
+              {formatOperatorFullName(operator)} — {date ? format(parseISO(date), "EEE, MMM d") : ""}
             </p>
           )}
         </DialogHeader>

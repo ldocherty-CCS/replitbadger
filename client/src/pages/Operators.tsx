@@ -15,7 +15,7 @@ import { useState } from "react";
 import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown, MapPinOff, Calendar, Clock, Upload, FileText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, formatOperatorFullName } from "@/lib/utils";
 import { getOperatorColor, getOperatorTypeLabel } from "@/lib/operator-colors";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { format, parseISO, isPast, isWithinInterval, isFuture } from "date-fns";
@@ -54,7 +54,9 @@ export default function Operators() {
   const [documentsOp, setDocumentsOp] = useState<any>(null);
 
   const filteredOperators = operators?.filter(op => 
-    op.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    op.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    op.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    formatOperatorFullName(op).toLowerCase().includes(searchTerm.toLowerCase()) ||
     op.groupName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -97,11 +99,11 @@ export default function Operators() {
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
                     style={{ backgroundColor: getOperatorColor(op) }}
                   >
-                    {op.name.substring(0, 2).toUpperCase()}
+                    {(op.firstName.charAt(0) + op.lastName.charAt(0)).toUpperCase()}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <CardTitle className="text-lg font-bold">{op.name}</CardTitle>
+                      <CardTitle className="text-lg font-bold">{formatOperatorFullName(op)}</CardTitle>
                       {op.isOutOfState && (
                         <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 dark:text-amber-400">OOS</Badge>
                       )}
@@ -365,7 +367,8 @@ function OperatorDialog({ open, onOpenChange, initialData, operators }: any) {
     if (!groupName.trim()) return;
     const formData = new FormData(e.currentTarget);
     const data = {
-      name: formData.get("name") as string,
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
       groupName: groupName.trim(),
       phone: formData.get("phone") as string,
       truckLocation: truckLocation,
@@ -395,9 +398,15 @@ function OperatorDialog({ open, onOpenChange, initialData, operators }: any) {
           <DialogTitle>{isEditing ? "Edit Operator" : "Add Operator"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Full Name</Label>
-            <Input id="name" name="name" defaultValue={initialData?.name} required data-testid="input-operator-name" />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="firstName">First Name</Label>
+              <Input id="firstName" name="firstName" defaultValue={initialData?.firstName} required data-testid="input-operator-first-name" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Last Name</Label>
+              <Input id="lastName" name="lastName" defaultValue={initialData?.lastName} required data-testid="input-operator-last-name" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -573,9 +582,9 @@ function AvailabilityDialog({ open, onOpenChange, operator }: { open: boolean; o
               className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
               style={{ backgroundColor: getOperatorColor(operator) }}
             >
-              {operator.name.substring(0, 2).toUpperCase()}
+              {(operator.firstName.charAt(0) + operator.lastName.charAt(0)).toUpperCase()}
             </div>
-            {operator.name} — Availability
+            {formatOperatorFullName(operator)} — Availability
           </DialogTitle>
         </DialogHeader>
 
@@ -752,7 +761,7 @@ function DocumentsDialog({ open, onOpenChange, operator }: { open: boolean; onOp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Documents - {operator.name}</DialogTitle>
+          <DialogTitle>Documents - {formatOperatorFullName(operator)}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex items-center gap-2">

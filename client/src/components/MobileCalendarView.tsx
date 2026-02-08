@@ -8,7 +8,7 @@ import { useOperators } from "@/hooks/use-operators";
 import { useTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn, formatOperatorShortName, formatOperatorFullName } from "@/lib/utils";
 import type { Job, Operator } from "@shared/schema";
 import { CreateJobDialog } from "./CreateJobDialog";
 import { PlaceHoldDialog } from "./PlaceHoldDialog";
@@ -279,9 +279,10 @@ export function MobileCalendarView() {
       const typeA = a.operatorType === "assistant" ? 1 : 0;
       const typeB = b.operatorType === "assistant" ? 1 : 0;
       if (typeA !== typeB) return typeA - typeB;
-      const lastA = a.name.trim().split(/\s+/).pop()?.toLowerCase() || "";
-      const lastB = b.name.trim().split(/\s+/).pop()?.toLowerCase() || "";
-      return lastA.localeCompare(lastB);
+      const lastA = a.lastName.toLowerCase();
+      const lastB = b.lastName.toLowerCase();
+      if (lastA !== lastB) return lastA.localeCompare(lastB);
+      return a.firstName.toLowerCase().localeCompare(b.firstName.toLowerCase());
     });
     const groups: { name: string; operators: Operator[] }[] = [];
     let currentGroup = "";
@@ -328,7 +329,8 @@ export function MobileCalendarView() {
     const { operatorId, date: dateStr } = dropData;
 
     if (operatorId && dateStr && operatorOffDays.has(`${operatorId}-${dateStr}`)) {
-      const opName = operators?.find((o: any) => o.id === operatorId)?.name || "This operator";
+      const op = operators?.find((o: any) => o.id === operatorId);
+      const opName = op ? formatOperatorFullName(op) : "This operator";
       toast({
         title: "Cannot Schedule",
         description: `${opName} has the day off on ${format(parseISO(dateStr), "EEE M/d")}. Remove their time off first.`,
@@ -478,7 +480,7 @@ export function MobileCalendarView() {
                   >
                     <div className="px-1 py-px flex items-center border-r bg-muted/30 sticky left-0 z-10">
                       <span className="text-[9px] font-semibold leading-tight truncate">
-                        {operator.name.split(" ").map(n => n.slice(0, 5)).join(" ")}
+                        {formatOperatorShortName(operator)}
                       </span>
                     </div>
                     {weekDays.map((day) => {
@@ -538,7 +540,7 @@ export function MobileCalendarView() {
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
             <p className="text-xs text-muted-foreground text-center mb-3">
-              {operators?.find((o) => o.id === actionSheet.operatorId)?.name} &mdash;{" "}
+              {(() => { const op = operators?.find((o) => o.id === actionSheet.operatorId); return op ? formatOperatorFullName(op) : ""; })()} &mdash;{" "}
               {format(parseISO(actionSheet.date), "EEE, MMM d")}
             </p>
             <Button

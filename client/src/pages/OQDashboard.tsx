@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, Plus, AlertTriangle, CheckCircle2, Clock, XCircle, Search, FileText, Pencil, Trash2, Shield, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatOperatorFullName } from "@/lib/utils";
 
 type OQStatus = "active" | "expiring_soon" | "expired" | "missing";
 
@@ -256,7 +256,7 @@ export default function OQDashboard() {
     if (searchTerm) {
       const lower = searchTerm.toLowerCase();
       filtered = filtered.filter(oq =>
-        oq.operator?.name?.toLowerCase().includes(lower) ||
+        (oq.operator ? formatOperatorFullName(oq.operator).toLowerCase().includes(lower) : false) ||
         oq.qualification?.name?.toLowerCase().includes(lower) ||
         oq.documentName?.toLowerCase().includes(lower) ||
         oq.notes?.toLowerCase().includes(lower)
@@ -398,7 +398,7 @@ export default function OQDashboard() {
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-8 rounded-full shrink-0" style={{ backgroundColor: getOperatorColor(row.operator) }} />
                             <div className="min-w-0">
-                              <div className="font-medium text-sm truncate">{row.operator.name}</div>
+                              <div className="font-medium text-sm truncate">{formatOperatorFullName(row.operator)}</div>
                               <div className="text-xs text-muted-foreground truncate">{row.operator.groupName}</div>
                             </div>
                           </div>
@@ -511,7 +511,7 @@ export default function OQDashboard() {
                         )}
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-sm" data-testid={`text-alert-operator-${oq.id}`}>{oq.operator?.name}</span>
+                            <span className="font-medium text-sm" data-testid={`text-alert-operator-${oq.id}`}>{oq.operator ? formatOperatorFullName(oq.operator) : "Unknown"}</span>
                             <span className="text-muted-foreground text-sm">-</span>
                             <span className="text-sm" data-testid={`text-alert-qual-${oq.id}`}>{oq.qualification?.name}</span>
                           </div>
@@ -570,7 +570,7 @@ export default function OQDashboard() {
               <SelectContent>
                 <SelectItem value="all">All Operators</SelectItem>
                 {activeOperators.map(op => (
-                  <SelectItem key={op.id} value={String(op.id)}>{op.name}</SelectItem>
+                  <SelectItem key={op.id} value={String(op.id)}>{formatOperatorFullName(op)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -609,7 +609,7 @@ export default function OQDashboard() {
                         <td className="p-3">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-6 rounded-full shrink-0" style={{ backgroundColor: oq.operator ? getOperatorColor(oq.operator) : "#888" }} />
-                            <span className="font-medium">{oq.operator?.name || "Unknown"}</span>
+                            <span className="font-medium">{oq.operator ? formatOperatorFullName(oq.operator) : "Unknown"}</span>
                           </div>
                         </td>
                         <td className="p-3">{oq.qualification?.name || "Unknown"}</td>
@@ -684,7 +684,7 @@ export default function OQDashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   {activeOperators.map(op => (
-                    <SelectItem key={op.id} value={String(op.id)}>{op.name}</SelectItem>
+                    <SelectItem key={op.id} value={String(op.id)}>{formatOperatorFullName(op)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

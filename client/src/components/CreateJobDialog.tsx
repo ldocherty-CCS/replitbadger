@@ -37,6 +37,7 @@ import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { formatOperatorFullName } from "@/lib/utils";
 
 const formSchema = insertJobSchema.extend({
   customerId: z.coerce.number(),
@@ -620,7 +621,7 @@ export function CreateJobDialog({
                           ?.filter((op) => !(op as any).isAssistantOnly && (op as any).operatorType !== "assistant")
                           .map((op) => (
                           <SelectItem key={op.id} value={op.id.toString()}>
-                            {op.name}
+                            {formatOperatorFullName(op)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -677,7 +678,7 @@ export function CreateJobDialog({
                               ?.filter((op) => op.id !== form.watch("operatorId"))
                               .map((op) => (
                                 <SelectItem key={op.id} value={op.id.toString()}>
-                                  {op.name}
+                                  {formatOperatorFullName(op)}
                                   {op.operatorType === "local_assistant" ? " (Assistant)" : ""}
                                 </SelectItem>
                               ))}
@@ -695,7 +696,7 @@ export function CreateJobDialog({
               <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30" data-testid="warning-operator-off">
                 <CalendarOff className="w-4 h-4 text-destructive shrink-0" />
                 <span className="text-sm text-destructive font-medium">
-                  {operators?.find(o => o.id === watchedOperatorId)?.name || "This operator"} has the day off on this date. Remove their time off first to schedule here.
+                  {(() => { const op = operators?.find(o => o.id === watchedOperatorId); return op ? formatOperatorFullName(op) : "This operator"; })()} has the day off on this date. Remove their time off first to schedule here.
                 </span>
               </div>
             )}
@@ -738,8 +739,8 @@ function QualificationWarning({ customerId, operatorId, customers, operators }: 
     const has: string[] = operator.qualifications || [];
     if (required.length === 0) return null;
     const missing = required.filter(q => !has.includes(q));
-    if (missing.length === 0) return { ok: true, operator: operator.name };
-    return { ok: false, missing, operator: operator.name, customer: customer.name };
+    if (missing.length === 0) return { ok: true, operator: formatOperatorFullName(operator) };
+    return { ok: false, missing, operator: formatOperatorFullName(operator), customer: customer.name };
   }, [customerId, operatorId, customers, operators]);
 
   if (!warning) return null;

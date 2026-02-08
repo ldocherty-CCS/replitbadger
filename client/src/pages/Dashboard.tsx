@@ -42,7 +42,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatOperatorShortName, formatOperatorFullName } from "@/lib/utils";
 import { getOperatorColor } from "@/lib/operator-colors";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { DroppableDay } from "@/components/DroppableDay";
@@ -400,9 +400,10 @@ function DesktopDashboard() {
       const typeA = a.operatorType === "assistant" ? 1 : 0;
       const typeB = b.operatorType === "assistant" ? 1 : 0;
       if (typeA !== typeB) return typeA - typeB;
-      const lastA = a.name.trim().split(/\s+/).pop()?.toLowerCase() || "";
-      const lastB = b.name.trim().split(/\s+/).pop()?.toLowerCase() || "";
-      return lastA.localeCompare(lastB);
+      const lastA = a.lastName.toLowerCase();
+      const lastB = b.lastName.toLowerCase();
+      if (lastA !== lastB) return lastA.localeCompare(lastB);
+      return a.firstName.toLowerCase().localeCompare(b.firstName.toLowerCase());
     });
   }, [rawOperators]);
   const { data: timeOffRecords } = useTimeOff({
@@ -468,12 +469,12 @@ function DesktopDashboard() {
 
     const targetOp = operators?.find((o: any) => o.id === operatorId);
     if (targetOp && ((targetOp as any).isAssistantOnly || (targetOp as any).operatorType === "assistant")) {
-      toast({ title: "Cannot Assign", description: `${targetOp.name} is an assistant operator. Assign them as an assistant on a job instead.`, variant: "destructive" });
+      toast({ title: "Cannot Assign", description: `${formatOperatorFullName(targetOp)} is an assistant operator. Assign them as an assistant on a job instead.`, variant: "destructive" });
       return;
     }
 
     if (operatorId && dateStr && operatorOffDays.has(`${operatorId}-${dateStr}`)) {
-      const opName = targetOp?.name || "This operator";
+      const opName = targetOp ? formatOperatorFullName(targetOp) : "This operator";
       toast({ title: "Cannot Schedule", description: `${opName} has the day off on ${format(parseISO(dateStr), "EEE M/d")}. Remove their time off first.`, variant: "destructive" });
       return;
     }
@@ -853,8 +854,8 @@ function DesktopDashboard() {
                               )}
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                              {job.operator?.name && (
-                                <span>{job.operator.name}</span>
+                              {job.operator && (
+                                <span>{formatOperatorShortName(job.operator)}</span>
                               )}
                               {job.scope && (
                                 <span className="truncate max-w-[300px]">{job.scope}</span>
@@ -967,7 +968,7 @@ function DesktopDashboard() {
                                 style={{ backgroundColor: getOperatorColor(operator) }} 
                               />
                               <div className="min-w-0">
-                                <div className="font-bold text-sm leading-tight truncate">{operator.name}</div>
+                                <div className="font-bold text-sm leading-tight truncate">{formatOperatorShortName(operator)}</div>
                                 {operator.phone && (
                                   <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{operator.phone}</div>
                                 )}

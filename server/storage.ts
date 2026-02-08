@@ -63,7 +63,7 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // Operators
   async getOperators(): Promise<Operator[]> {
-    return await db.select().from(operators).orderBy(operators.groupName, operators.name);
+    return await db.select().from(operators).orderBy(operators.groupName, operators.lastName, operators.firstName);
   }
 
   async getOperator(id: number): Promise<Operator | undefined> {

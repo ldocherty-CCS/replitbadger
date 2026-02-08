@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users, Truck, UserCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn, formatOperatorShortName } from "@/lib/utils";
 import type { Job, Customer, Operator } from "@shared/schema";
 import {
   ContextMenu,
@@ -162,7 +162,7 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
             <Users className="w-3 h-3 shrink-0" />
             {job.assistantOperator ? (
               <span className="font-medium line-clamp-1" data-testid={`text-assistant-${job.id}`}>
-                + {job.assistantOperator.name}
+                + {formatOperatorShortName(job.assistantOperator)}
               </span>
             ) : (
               <span className="italic font-medium" data-testid={`text-needs-assistant-${job.id}`}>

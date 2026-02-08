@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash, Droplets, Trash2, Cable } from "lucide-react";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { format, parseISO } from "date-fns";
+import { formatOperatorFullName } from "@/lib/utils";
 
 const statusLabels: Record<string, string> = {
   dispatched: "Dispatched",
@@ -86,12 +87,12 @@ export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetails
           <DetailRow icon={<MapPin className="w-4 h-4" />} label="Address" value={job.address} testId="detail-address" />
 
           <div className="grid grid-cols-2 gap-4">
-            <DetailRow icon={<Users className="w-4 h-4" />} label="Operator" value={job.operator?.name || "Unassigned"} testId="detail-operator" />
+            <DetailRow icon={<Users className="w-4 h-4" />} label="Operator" value={job.operator ? formatOperatorFullName(job.operator) : "Unassigned"} testId="detail-operator" />
             {job.additionalOperatorNeeded && (
               <DetailRow
                 icon={<Users className="w-4 h-4" />}
                 label="Assistant"
-                value={job.assistantOperator?.name || "Needs assignment"}
+                value={job.assistantOperator ? formatOperatorFullName(job.assistantOperator) : "Needs assignment"}
                 testId="detail-assistant"
               />
             )}

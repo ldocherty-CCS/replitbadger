@@ -11,6 +11,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import { formatOperatorFullName } from "@/lib/utils";
 
 export default function Jobs() {
   const { data: jobs, isLoading } = useJobs();
@@ -46,7 +47,7 @@ export default function Jobs() {
                   {format(new Date(job.scheduledDate), "MMM d, yyyy")}
                 </TableCell>
                 <TableCell>{job.customer?.name}</TableCell>
-                <TableCell>{job.operator?.name || <span className="text-muted-foreground italic">Unassigned</span>}</TableCell>
+                <TableCell>{job.operator ? formatOperatorFullName(job.operator) : <span className="text-muted-foreground italic">Unassigned</span>}</TableCell>
                 <TableCell className="max-w-[200px] truncate" title={job.address}>
                   {job.address}
                 </TableCell>

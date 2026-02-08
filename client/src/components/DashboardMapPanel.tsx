@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useGoogleMapsReady } from "@/components/AddressAutocomplete";
 import { getOperatorColor } from "@/lib/operator-colors";
+import { formatOperatorFullName } from "@/lib/utils";
 
 interface DashboardMapPanelProps {
   operators?: any[];
@@ -195,7 +196,7 @@ export function DashboardMapPanel({ operators: propOperators }: DashboardMapPane
           const marker = new google.maps.Marker({
             map: googleMap.current!,
             position: { lat: markerLat, lng: markerLng },
-            title: op.name,
+            title: formatOperatorFullName(op),
             icon: {
               url: createTruckMarkerSvg(getOperatorColor(op)),
               scaledSize: new google.maps.Size(28, 28),
@@ -207,7 +208,7 @@ export function DashboardMapPanel({ operators: propOperators }: DashboardMapPane
             : '';
           const infoContent = `
             <div style="min-width: 160px; font-family: system-ui, sans-serif;">
-              <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${escapeHtml(op.name)}</div>
+              <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${escapeHtml(formatOperatorFullName(op))}</div>
               ${outOfStateBadge}
               <div style="font-size: 11px; color: #888;">${escapeHtml(locationNote)}</div>
               <div style="font-size: 12px; margin-top: 2px;">${escapeHtml(locationLabel)}</div>
@@ -263,7 +264,7 @@ export function DashboardMapPanel({ operators: propOperators }: DashboardMapPane
         },
       });
 
-      const operatorName = escapeHtml(job.operator?.name || "Unassigned");
+      const operatorName = escapeHtml(job.operator ? formatOperatorFullName(job.operator) : "Unassigned");
       const customerName = escapeHtml(job.customer?.name || "Unknown");
       const scopeText = escapeHtml(job.scope || "");
       const addressText = escapeHtml(job.address || "");

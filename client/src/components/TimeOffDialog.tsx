@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Trash2, CalendarOff, X, ChevronDown, ChevronUp } from "lucide-react";
 import { format, parseISO, addDays, differenceInDays } from "date-fns";
+import { formatOperatorFullName } from "@/lib/utils";
 
 interface TimeOffDialogProps {
   open: boolean;
@@ -95,7 +96,7 @@ export function TimeOffDialog({ open, onOpenChange, defaultOperatorId, defaultDa
                 <SelectContent>
                   {operators?.map((op) => (
                     <SelectItem key={op.id} value={op.id.toString()}>
-                      {op.name}
+                      {formatOperatorFullName(op)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -185,7 +186,7 @@ export function TimeOffDialog({ open, onOpenChange, defaultOperatorId, defaultDa
                         )}
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium truncate">
-                            {record.operator?.name || "Unknown"}
+                            {record.operator ? formatOperatorFullName(record.operator) : "Unknown"}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {format(parseISO(record.startDate), "MMM d, yyyy")}
