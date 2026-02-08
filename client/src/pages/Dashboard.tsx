@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, addDays, startOfWeek, endOfWeek, parseISO } from "date-fns";
+import { format, addDays, startOfWeek, endOfWeek, parseISO, parse } from "date-fns";
+import { Input } from "@/components/ui/input";
 import { MobileCalendarView } from "@/components/MobileCalendarView";
 import {
   DndContext,
@@ -29,7 +30,7 @@ import { JobDetailsDialog } from "@/components/JobDetailsDialog";
 import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
 import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
-import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, Eye } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, Eye, Search, X, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -369,8 +370,28 @@ function DesktopDashboard() {
   const [noteDialog, setNoteDialog] = useState<{ open: boolean; date: string; operatorId: number; editJob?: any }>({ open: false, date: "", operatorId: 0 });
   const [viewingJob, setViewingJob] = useState<Job | null>(null);
   const [removeOffConfirm, setRemoveOffConfirm] = useState<{ open: boolean; operatorId: number; date: string; recordId: number; startDate: string; endDate: string } | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (searchOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchOpen]);
+
+  const { data: searchResults, isLoading: searchLoading } = useQuery<any[]>({
+    queryKey: [`/api/jobs/search?q=${encodeURIComponent(debouncedQuery)}`],
+    enabled: debouncedQuery.length >= 2,
+  });
 
   const updateJob = useUpdateJob();
   const deleteJob = useDeleteJob();
@@ -950,12 +971,34 @@ function DesktopDashboard() {
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
-          <span className="text-sm font-medium text-muted-foreground ml-2">
+          <span className="text-sm font-medium text-muted-foreground">
             {format(startDate, "MMMM yyyy")}
           </span>
+          <Input
+            type="date"
+            className="w-40"
+            value={format(currentDate, "yyyy-MM-dd")}
+            onChange={(e) => {
+              if (e.target.value) {
+                setCurrentDate(parseISO(e.target.value));
+              }
+            }}
+            data-testid="input-jump-to-date"
+          />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              setSearchOpen(!searchOpen);
+              if (searchOpen) { setSearchQuery(""); setDebouncedQuery(""); }
+            }}
+            data-testid="button-search"
+          >
+            <Search className="w-4 h-4" />
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -980,6 +1023,98 @@ function DesktopDashboard() {
           </Button>
         </div>
       </div>
+
+      {searchOpen && (
+        <div className="border-b bg-card px-6 py-3" data-testid="search-panel">
+          <div className="max-w-2xl">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                ref={searchInputRef}
+                placeholder="Search jobs by customer, operator, address, scope, PO number..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-9"
+                data-testid="input-search"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => { setSearchQuery(""); setDebouncedQuery(""); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  data-testid="button-clear-search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {debouncedQuery.length >= 2 && (
+              <div className="mt-2 max-h-80 overflow-y-auto rounded-md border bg-background" data-testid="search-results">
+                {searchLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : searchResults && searchResults.length > 0 ? (
+                  <div className="divide-y">
+                    {searchResults.map((job: any) => {
+                      const statusInfo = STATUS_COLORS[job.status] || { hex: "#9ca3af", label: job.status };
+                      return (
+                        <button
+                          key={job.id}
+                          className="w-full text-left px-4 py-2.5 hover-elevate flex items-start gap-3"
+                          onClick={() => {
+                            setCurrentDate(parseISO(job.scheduledDate));
+                            setSearchOpen(false);
+                            setSearchQuery("");
+                            setDebouncedQuery("");
+                          }}
+                          data-testid={`search-result-${job.id}`}
+                        >
+                          <div
+                            className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0"
+                            style={{ background: statusInfo.hex }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium">
+                                {job.customer?.name || "Unknown Customer"}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(parseISO(job.scheduledDate), "EEE, MMM d, yyyy")}
+                              </span>
+                              {job.startTime && (
+                                <span className="text-xs text-muted-foreground">
+                                  {job.startTime}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+                              {job.operator?.name && (
+                                <span>{job.operator.name}</span>
+                              )}
+                              {job.scope && (
+                                <span className="truncate max-w-[300px]">{job.scope}</span>
+                              )}
+                            </div>
+                            {job.address && (
+                              <div className="text-xs text-muted-foreground/70 mt-0.5 truncate">
+                                {job.address}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-6 text-center text-sm text-muted-foreground" data-testid="text-no-results">
+                    No jobs found for "{debouncedQuery}"
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <DndContext 
         sensors={sensors} 

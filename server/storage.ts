@@ -6,7 +6,7 @@ import {
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
   type OperatorQualificationWithDetails
 } from "@shared/schema";
-import { eq, and, gte, lte, aliasedTable } from "drizzle-orm";
+import { eq, and, gte, lte, or, ilike, aliasedTable, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Operators
@@ -24,6 +24,7 @@ export interface IStorage {
 
   // Jobs
   getJobs(filters?: { startDate?: string; endDate?: string; operatorId?: number }): Promise<(Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator })[]>;
+  searchJobs(query: string, limit?: number): Promise<(Job & { customer?: Customer; operator?: Operator })[]>;
   getJob(id: number): Promise<Job | undefined>;
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: number, updates: UpdateJobRequest): Promise<Job>;
@@ -192,6 +193,57 @@ export class DatabaseStorage implements IStorage {
       operator: row.operator || undefined,
       assistantOperator: row.assistantOperator || undefined,
       creator: row.creator?.id ? row.creator : null,
+    }));
+  }
+
+  async searchJobs(query: string, limit: number = 50): Promise<(Job & { customer?: Customer; operator?: Operator })[]> {
+    const pattern = `%${query}%`;
+    const results = await db.select({
+      id: jobs.id,
+      customerId: jobs.customerId,
+      operatorId: jobs.operatorId,
+      scope: jobs.scope,
+      startTime: jobs.startTime,
+      scheduledDate: jobs.scheduledDate,
+      address: jobs.address,
+      lat: jobs.lat,
+      lng: jobs.lng,
+      requestorContact: jobs.requestorContact,
+      onSiteContact: jobs.onSiteContact,
+      status: jobs.status,
+      billingInfo: jobs.billingInfo,
+      poNumber: jobs.poNumber,
+      ticketCreated: jobs.ticketCreated,
+      manifestNeeded: jobs.manifestNeeded,
+      siteQuals: jobs.siteQuals,
+      additionalOperatorNeeded: jobs.additionalOperatorNeeded,
+      assistantOperatorId: jobs.assistantOperatorId,
+      sortOrder: jobs.sortOrder,
+      seriesId: jobs.seriesId,
+      createdBy: jobs.createdBy,
+      createdAt: jobs.createdAt,
+      customer: customers,
+      operator: operators,
+    })
+    .from(jobs)
+    .leftJoin(customers, eq(jobs.customerId, customers.id))
+    .leftJoin(operators, eq(jobs.operatorId, operators.id))
+    .where(
+      or(
+        ilike(customers.name, pattern),
+        ilike(operators.name, pattern),
+        ilike(jobs.address, pattern),
+        ilike(jobs.scope, pattern),
+        ilike(jobs.poNumber, pattern),
+      )
+    )
+    .orderBy(desc(jobs.scheduledDate))
+    .limit(limit);
+
+    return results.map(row => ({
+      ...row,
+      customer: row.customer || undefined,
+      operator: row.operator || undefined,
     }));
   }
 

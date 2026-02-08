@@ -201,6 +201,20 @@ export async function registerRoutes(
     res.json(jobs);
   });
 
+  app.get("/api/jobs/search", async (req, res) => {
+    try {
+      const q = (req.query.q as string) || "";
+      if (q.trim().length < 2) {
+        return res.json([]);
+      }
+      const results = await storage.searchJobs(q.trim(), 50);
+      res.json(results);
+    } catch (err) {
+      console.error("Search error:", err);
+      res.status(500).json({ message: "Search failed" });
+    }
+  });
+
   app.get(api.jobs.get.path, async (req, res) => {
     const job = await storage.getJob(Number(req.params.id));
     if (!job) return res.status(404).json({ message: "Job not found" });
