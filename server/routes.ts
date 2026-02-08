@@ -90,8 +90,15 @@ export async function registerRoutes(
   });
 
   app.delete(api.operators.delete.path, async (req, res) => {
-    await storage.deleteOperator(Number(req.params.id));
-    res.status(204).send();
+    try {
+      await storage.deleteOperator(Number(req.params.id));
+      res.status(204).send();
+    } catch (err: any) {
+      if (err?.code === "23503") {
+        return res.status(409).json({ message: "Cannot delete this operator because they have jobs assigned. Please reassign or delete their jobs first." });
+      }
+      res.status(500).json({ message: "Failed to delete operator" });
+    }
   });
 
   // === Customers ===

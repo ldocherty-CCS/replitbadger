@@ -103,8 +103,8 @@ export function useDeleteOperator() {
       });
 
       if (!res.ok) {
-        if (res.status === 404) throw new Error("Operator not found");
-        throw new Error("Failed to delete operator");
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.message || (res.status === 404 ? "Operator not found" : "Failed to delete operator"));
       }
     },
     onSuccess: () => {
