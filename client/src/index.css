@@ -112,3 +112,12 @@
 .animate-needs-attention {
   animation: needs-attention 1.8s ease-in-out infinite;
 }
+
+@keyframes blink-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+.animate-blink-red {
+  color: #ef4444;
+  animation: blink-red 0.5s ease-in-out infinite;
+}

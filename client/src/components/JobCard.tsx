@@ -159,8 +159,8 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
           
           <div className="flex gap-0.5">
             {missingQuals.length > 0 && (
-              <div title={`Missing: ${missingQuals.join(", ")}`} className="opacity-90" data-testid={`icon-missing-quals-${job.id}`}>
-                <ShieldAlert className="w-3 h-3" />
+              <div title={`Missing: ${missingQuals.join(", ")}`} className="animate-blink-red" data-testid={`icon-missing-quals-${job.id}`}>
+                <ShieldAlert className="w-4 h-4" />
               </div>
             )}
             {job.manifestNeeded && (
