@@ -407,7 +407,7 @@ export function DashboardMapPanel({ operators: propOperators }: DashboardMapPane
             <button
               type="button"
               className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer"
-              onClick={() => { const el = document.getElementById("map-range-start-input") as HTMLInputElement; if (el?.showPicker) el.showPicker(); else el?.click(); }}
+              onClick={() => { const el = document.getElementById("map-range-start-input") as HTMLInputElement; if (el) { el.focus(); el.click(); } }}
               data-testid="display-map-range-start"
             >
               {format(parseISO(rangeStart), "EEE, MMM d")}
@@ -425,7 +425,7 @@ export function DashboardMapPanel({ operators: propOperators }: DashboardMapPane
             <button
               type="button"
               className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer"
-              onClick={() => { const el = document.getElementById("map-range-end-input") as HTMLInputElement; if (el?.showPicker) el.showPicker(); else el?.click(); }}
+              onClick={() => { const el = document.getElementById("map-range-end-input") as HTMLInputElement; if (el) { el.focus(); el.click(); } }}
               data-testid="display-map-range-end"
             >
               {format(parseISO(rangeEnd), "EEE, MMM d")}
