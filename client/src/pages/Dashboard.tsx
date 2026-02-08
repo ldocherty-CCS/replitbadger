@@ -30,6 +30,16 @@ import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
 import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff } from "@/hooks/use-time-off";
 import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { getOperatorColor } from "@/lib/operator-colors";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -354,6 +364,7 @@ function DesktopDashboard() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [noteDialog, setNoteDialog] = useState<{ open: boolean; date: string; operatorId: number; editJob?: any }>({ open: false, date: "", operatorId: 0 });
   const [viewingJob, setViewingJob] = useState<Job | null>(null);
+  const [removeOffConfirm, setRemoveOffConfirm] = useState<{ open: boolean; operatorId: number; date: string; recordId: number; startDate: string; endDate: string } | null>(null);
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -519,7 +530,8 @@ function DesktopDashboard() {
       if (record.startDate === record.endDate) {
         deleteTimeOff.mutate(record.id);
       } else {
-        removeTimeOffDay.mutate({ id: record.id, date });
+        setRemoveOffConfirm({ open: true, operatorId, date, recordId: record.id, startDate: record.startDate, endDate: record.endDate });
+        return;
       }
     } else {
       const op = operators?.find((o) => o.id === operatorId);
@@ -1289,6 +1301,43 @@ function DesktopDashboard() {
         operatorId={noteDialog.operatorId}
         editJob={noteDialog.editJob}
       />
+
+      <AlertDialog open={!!removeOffConfirm?.open} onOpenChange={(open) => { if (!open) setRemoveOffConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Time Off</AlertDialogTitle>
+            <AlertDialogDescription>
+              This day is part of a time-off period ({removeOffConfirm ? format(parseISO(removeOffConfirm.startDate), "MMM d") : ""} - {removeOffConfirm ? format(parseISO(removeOffConfirm.endDate), "MMM d") : ""}). Would you like to remove just this day or the entire time-off period?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel data-testid="btn-cancel-remove-off">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="btn-remove-single-day"
+              onClick={() => {
+                if (removeOffConfirm) {
+                  removeTimeOffDay.mutate({ id: removeOffConfirm.recordId, date: removeOffConfirm.date });
+                  setRemoveOffConfirm(null);
+                }
+              }}
+            >
+              Remove This Day Only
+            </AlertDialogAction>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              data-testid="btn-remove-entire-series"
+              onClick={() => {
+                if (removeOffConfirm) {
+                  deleteTimeOff.mutate(removeOffConfirm.recordId);
+                  setRemoveOffConfirm(null);
+                }
+              }}
+            >
+              Remove Entire Time Off
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
