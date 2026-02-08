@@ -61,6 +61,7 @@ interface CreateJobDialogProps {
   initialData?: Job | null;
   defaultDate?: string;
   defaultOperatorId?: number | null;
+  defaultStatus?: string;
 }
 
 export function CreateJobDialog({ 
@@ -69,6 +70,7 @@ export function CreateJobDialog({
   initialData, 
   defaultDate,
   defaultOperatorId,
+  defaultStatus,
 }: CreateJobDialogProps) {
   const { data: customers } = useCustomers();
   const { data: operators } = useOperators();
@@ -89,7 +91,7 @@ export function CreateJobDialog({
       scope: "",
       address: "",
       startTime: "08:00 AM",
-      status: "missing_info",
+      status: defaultStatus || "missing_info",
       scheduledDate: defaultDate || new Date().toISOString().split("T")[0],
       additionalOperatorNeeded: false,
       manifestNeeded: false,
@@ -131,7 +133,7 @@ export function CreateJobDialog({
         scope: "",
         address: "",
         startTime: "08:00 AM",
-        status: "missing_info",
+        status: defaultStatus || "missing_info",
         scheduledDate: defaultDate || new Date().toISOString().split("T")[0],
         operatorId: defaultOperatorId || undefined,
         additionalOperatorNeeded: false,
@@ -149,7 +151,7 @@ export function CreateJobDialog({
       setIsMultiDay(false);
       setEndDate("");
     }
-  }, [initialData, defaultDate, defaultOperatorId, form]);
+  }, [initialData, defaultDate, defaultOperatorId, defaultStatus, form]);
 
   const watchedOperatorId = form.watch("operatorId");
   const watchedDate = form.watch("scheduledDate");

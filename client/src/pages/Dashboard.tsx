@@ -352,6 +352,7 @@ function DesktopDashboard() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [defaultDate, setDefaultDate] = useState<string | undefined>();
   const [defaultOperatorId, setDefaultOperatorId] = useState<number | null>(null);
+  const [defaultStatus, setDefaultStatus] = useState<string | undefined>();
   const [activeDragJob, setActiveDragJob] = useState<Job | null>(null);
   const [mapVisible, setMapVisible] = useState(true);
   const [splitPercent, setSplitPercent] = useState(65);
@@ -933,7 +934,7 @@ function DesktopDashboard() {
             {mapVisible ? <PanelRightClose className="w-4 h-4 mr-2" /> : <PanelRightOpen className="w-4 h-4 mr-2" />}
             Map
           </Button>
-          <Button onClick={() => { setSelectedJob(null); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }} className="shadow-lg shadow-primary/20" data-testid="button-new-job">
+          <Button onClick={() => { setSelectedJob(null); setDefaultDate(undefined); setDefaultOperatorId(null); setDefaultStatus(undefined); setIsCreateOpen(true); }} className="shadow-lg shadow-primary/20" data-testid="button-new-job">
             <Plus className="w-4 h-4 mr-2" />
             New Job
           </Button>
@@ -1042,7 +1043,7 @@ function DesktopDashboard() {
                             onStatusChange={handleStatusChange}
                             onCancel={handleCancel}
                             onRestore={handleRestore}
-                            onCellClick={(date, opId) => { setSelectedJob(null); setDefaultDate(date); setDefaultOperatorId(opId); setIsCreateOpen(true); }}
+                            onCellClick={(date, opId) => { setSelectedJob(null); setDefaultDate(date); setDefaultOperatorId(opId); setDefaultStatus(undefined); setIsCreateOpen(true); }}
                             onPlaceHold={handlePlaceHold}
                             onAddNote={handleAddNote}
                             onRemoveOff={handleRemoveOff}
@@ -1088,9 +1089,19 @@ function DesktopDashboard() {
                         type="standby"
                         className="flex-1 min-w-[140px] p-1.5 border-r last:border-r-0"
                       >
-                        <div data-testid={`standby-cell-${day.iso}`}>
+                        <div
+                          className="min-h-[40px] cursor-pointer"
+                          data-testid={`standby-cell-${day.iso}`}
+                          onClick={() => {
+                            setSelectedJob(null);
+                            setDefaultDate(day.iso);
+                            setDefaultOperatorId(null);
+                            setDefaultStatus("standby");
+                            setIsCreateOpen(true);
+                          }}
+                        >
                           {standbyExpanded && dayStandby.map((job) => (
-                            <div key={job.id} onClick={() => setViewingJob(job)}>
+                            <div key={job.id} onClick={(e) => { e.stopPropagation(); setViewingJob(job); }}>
                               <JobCard
                                 job={job}
                                 sameLocationIndex={locationGroupMap[job.id]?.index}
@@ -1265,6 +1276,7 @@ function DesktopDashboard() {
         initialData={selectedJob}
         defaultDate={defaultDate}
         defaultOperatorId={defaultOperatorId}
+        defaultStatus={defaultStatus}
       />
 
       <PlaceHoldDialog
@@ -1289,7 +1301,7 @@ function DesktopDashboard() {
           if (!job.customerId) {
             setNoteDialog({ open: true, date: job.scheduledDate, operatorId: job.operatorId || 0, editJob: job });
           } else {
-            setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true);
+            setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setDefaultStatus(undefined); setIsCreateOpen(true);
           }
         }}
       />
