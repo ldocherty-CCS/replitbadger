@@ -115,8 +115,8 @@ export function CreateJobDialog({
       remoteHose: false,
       remoteHoseLength: "",
       remoteHoseOperatorId: null,
-      water: "",
-      dump: "",
+      water: "off_site",
+      dump: "off_site",
       srNumber: "",
       requestorContact: "",
       onSiteContact: "",
@@ -135,8 +135,8 @@ export function CreateJobDialog({
         scheduledDate: initialData.scheduledDate,
         remoteHose: (initialData as any).remoteHose ?? false,
         remoteHoseLength: (initialData as any).remoteHoseLength ?? "",
-        water: (initialData as any).water ?? "",
-        dump: (initialData as any).dump ?? "",
+        water: (initialData as any).water || "off_site",
+        dump: (initialData as any).dump || "off_site",
         srNumber: (initialData as any).srNumber ?? "",
         requestorContact: initialData.requestorContact ?? "",
         onSiteContact: initialData.onSiteContact ?? "",
@@ -160,8 +160,8 @@ export function CreateJobDialog({
         remoteHose: false,
         remoteHoseLength: "",
         remoteHoseOperatorId: null,
-        water: "",
-        dump: "",
+        water: "off_site",
+        dump: "off_site",
         srNumber: "",
         requestorContact: "",
         onSiteContact: "",
@@ -457,18 +457,18 @@ export function CreateJobDialog({
                 name="onSiteContact"
                 render={({ field }) => (
                   <FormItem>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between">
                       <FormLabel className="text-xs text-muted-foreground uppercase tracking-wide">On-Site Contact</FormLabel>
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="h-4 px-1 text-[10px] text-primary/70"
+                        className="h-6 px-2 text-xs gap-1"
                         onClick={handleCopyRequestorToContact}
                         data-testid="button-copy-requestor"
                       >
-                        <Copy className="w-2.5 h-2.5 mr-0.5" />
-                        Same
+                        <Copy className="w-3 h-3" />
+                        Same as Requestor
                       </Button>
                     </div>
                     <FormControl>
