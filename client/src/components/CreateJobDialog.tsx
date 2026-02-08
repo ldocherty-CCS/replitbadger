@@ -1,10 +1,11 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertJobSchema, type Job } from "@shared/schema";
+import { insertJobSchema, type Job, type CustomerContact } from "@shared/schema";
 import { useCreateJob, useUpdateJob, useCreateJobSeries } from "@/hooks/use-jobs";
 import { useCustomers } from "@/hooks/use-customers";
 import { useOperators } from "@/hooks/use-operators";
+import { useCustomerContacts } from "@/hooks/use-customer-contacts";
 import {
   Dialog,
   DialogContent,
@@ -30,8 +31,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff, Copy, Clock, MapPin, FileText, Truck, Droplets } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff, Copy, Clock, MapPin, FileText, Truck, Droplets, Search, Phone } from "lucide-react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
 import { useToast } from "@/hooks/use-toast";
@@ -438,7 +439,13 @@ export function CreateJobDialog({
                   <FormItem>
                     <FormLabel className="text-xs text-muted-foreground uppercase tracking-wide">Requestor</FormLabel>
                     <FormControl>
-                      <Input {...field} value={field.value || ""} placeholder="Name & phone number" data-testid="input-requestor" />
+                      <ContactSearchInput
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        customerId={form.watch("customerId")}
+                        placeholder="Search or type contact..."
+                        testId="input-requestor"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -465,7 +472,13 @@ export function CreateJobDialog({
                       </Button>
                     </div>
                     <FormControl>
-                      <Input {...field} value={field.value || ""} placeholder="Name & phone number" data-testid="input-onsite-contact" />
+                      <ContactSearchInput
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        customerId={form.watch("customerId")}
+                        placeholder="Search or type contact..."
+                        testId="input-onsite-contact"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -641,100 +654,64 @@ export function CreateJobDialog({
             </div>
 
             <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-start gap-4 flex-wrap">
                 <FormField
                   control={form.control}
-                  name="operatorId"
+                  name="additionalOperatorNeeded"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                        <Truck className="w-3 h-3" />
-                        Truck Operator
+                    <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            if (!checked) {
+                              form.setValue("assistantOperatorId", null);
+                            }
+                          }}
+                          data-testid="checkbox-additional-operator"
+                        />
+                      </FormControl>
+                      <FormLabel className="flex items-center gap-1.5 cursor-pointer text-sm">
+                        <Users className="w-3.5 h-3.5" />
+                        Additional operator needed
                       </FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value ? field.value.toString() : "undefined"}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-operator">
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="undefined">Unassigned</SelectItem>
-                          {operators
-                            ?.filter((op) => !(op as any).isAssistantOnly && (op as any).operatorType !== "assistant")
-                            .map((op) => (
-                            <SelectItem key={op.id} value={op.id.toString()}>
-                              {formatOperatorFullName(op)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="space-y-2">
+                {form.watch("additionalOperatorNeeded") && (
                   <FormField
                     control={form.control}
-                    name="additionalOperatorNeeded"
+                    name="assistantOperatorId"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-center gap-2 space-y-0 mt-7">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={(checked) => {
-                              field.onChange(checked);
-                              if (!checked) {
-                                form.setValue("assistantOperatorId", null);
-                              }
-                            }}
-                            data-testid="checkbox-additional-operator"
-                          />
-                        </FormControl>
-                        <FormLabel className="flex items-center gap-1.5 cursor-pointer text-sm">
-                          <Users className="w-3.5 h-3.5" />
-                          Additional operator needed
-                        </FormLabel>
+                      <FormItem className="flex-1 min-w-[200px]">
+                        <Select
+                          onValueChange={(val) => field.onChange(val === "none" ? null : val)}
+                          value={field.value ? field.value.toString() : "none"}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-assistant-operator">
+                              <SelectValue placeholder="Select assistant" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Not assigned yet</SelectItem>
+                            {operators
+                              ?.filter((op) => op.id !== form.watch("operatorId"))
+                              .map((op) => (
+                                <SelectItem key={op.id} value={op.id.toString()}>
+                                  {formatOperatorFullName(op)}
+                                  {op.operatorType === "local_assistant" ? " (Assistant)" : ""}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />
-
-                  {form.watch("additionalOperatorNeeded") && (
-                    <FormField
-                      control={form.control}
-                      name="assistantOperatorId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <Select
-                            onValueChange={(val) => field.onChange(val === "none" ? null : val)}
-                            value={field.value ? field.value.toString() : "none"}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-assistant-operator">
-                                <SelectValue placeholder="Select assistant" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">Not assigned yet</SelectItem>
-                              {operators
-                                ?.filter((op) => op.id !== form.watch("operatorId"))
-                                .map((op) => (
-                                  <SelectItem key={op.id} value={op.id.toString()}>
-                                    {formatOperatorFullName(op)}
-                                    {op.operatorType === "local_assistant" ? " (Assistant)" : ""}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                </div>
+                )}
               </div>
 
               {isOperatorOff && (
@@ -767,6 +744,107 @@ export function CreateJobDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ContactSearchInput({ value, onChange, customerId, placeholder, testId }: {
+  value: string;
+  onChange: (val: string) => void;
+  customerId: number | undefined;
+  placeholder?: string;
+  testId?: string;
+}) {
+  const { data: contacts } = useCustomerContacts(customerId);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  const filteredContacts = useMemo(() => {
+    if (!contacts || !inputValue.trim()) return contacts || [];
+    const search = inputValue.toLowerCase();
+    return contacts.filter(
+      (c) =>
+        c.name.toLowerCase().includes(search) ||
+        (c.phone && c.phone.toLowerCase().includes(search)) ||
+        (c.email && c.email.toLowerCase().includes(search)) ||
+        (c.role && c.role.toLowerCase().includes(search))
+    );
+  }, [contacts, inputValue]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+    onChange(e.target.value);
+    setShowDropdown(true);
+  };
+
+  const handleSelectContact = useCallback((contact: CustomerContact) => {
+    const formatted = contact.phone
+      ? `${contact.name} (${contact.phone})`
+      : contact.name;
+    setInputValue(formatted);
+    onChange(formatted);
+    setShowDropdown(false);
+  }, [onChange]);
+
+  const handleFocus = () => {
+    if (contacts && contacts.length > 0) {
+      setShowDropdown(true);
+    }
+  };
+
+  const handleBlur = () => {
+    setTimeout(() => setShowDropdown(false), 200);
+  };
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+        <Input
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={placeholder}
+          className="pl-8"
+          data-testid={testId}
+        />
+      </div>
+      {showDropdown && contacts && contacts.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
+          {(filteredContacts.length > 0 ? filteredContacts : contacts).map((contact) => (
+            <div
+              key={contact.id}
+              className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm hover-elevate"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleSelectContact(contact);
+              }}
+              data-testid={`contact-option-${contact.id}`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium">{contact.name}</span>
+                  {contact.role && (
+                    <Badge variant="secondary" className="text-[10px]">{contact.role}</Badge>
+                  )}
+                </div>
+                {contact.phone && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                    <Phone className="w-3 h-3" />
+                    {contact.phone}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
