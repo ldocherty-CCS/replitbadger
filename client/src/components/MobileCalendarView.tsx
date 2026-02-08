@@ -460,9 +460,18 @@ export function MobileCalendarView() {
                     {group.name}
                   </span>
                 </div>
-                {group.operators.map((operator) => (
+                {group.operators.map((operator, idx) => {
+                  const isAssistant = operator.operatorType === "assistant";
+                  const prevOp = idx > 0 ? group.operators[idx - 1] : null;
+                  const showAssistantDivider = isAssistant && prevOp && prevOp.operatorType !== "assistant";
+                  return (
+                  <div key={operator.id}>
+                    {showAssistantDivider && (
+                      <div className="px-1.5 py-px bg-muted/50 border-b" data-testid={`mobile-assistant-divider-${group.name}`}>
+                        <span className="text-[7px] font-bold uppercase tracking-wider text-muted-foreground/70">Assistants</span>
+                      </div>
+                    )}
                   <div
-                    key={operator.id}
                     className="grid border-b last:border-b-0"
                     style={{ gridTemplateColumns: "minmax(52px, 56px) repeat(7, 1fr)" }}
                     data-testid={`mobile-row-${operator.id}`}
@@ -501,7 +510,9 @@ export function MobileCalendarView() {
                       );
                     })}
                   </div>
-                ))}
+                  </div>
+                  );
+                })}
               </div>
             ))}
           </div>

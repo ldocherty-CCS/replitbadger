@@ -1148,13 +1148,18 @@ function DesktopDashboard() {
               <div className="min-w-fit">
                 {(() => {
                   let lastGroup = "";
+                  let lastType = "";
                   let rowIndex = 0;
                   return operators?.map((operator) => {
                     const showGroupHeader = operator.groupName !== lastGroup;
-                    if (showGroupHeader) rowIndex = 0;
+                    if (showGroupHeader) { rowIndex = 0; lastType = ""; }
                     const currentGroup = operator.groupName;
+                    const isAssistant = operator.operatorType === "assistant";
+                    const showAssistantDivider = !showGroupHeader && isAssistant && lastType !== "assistant";
                     lastGroup = currentGroup;
+                    lastType = operator.operatorType || "";
                     const isCollapsed = collapsedGroups.has(currentGroup);
+                    if (showAssistantDivider) rowIndex = 0;
                     const isEven = rowIndex % 2 === 0;
                     rowIndex++;
                     return (
@@ -1168,6 +1173,17 @@ function DesktopDashboard() {
                             <div className="w-48 shrink-0 px-3 py-1.5 border-r sticky left-0 z-10 bg-muted/40 flex items-center gap-2">
                               {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{currentGroup}</span>
+                            </div>
+                            {weekDays.map((day) => (
+                              <div key={day.iso} className="flex-1 min-w-[140px] border-r last:border-r-0" />
+                            ))}
+                          </div>
+                        )}
+                        {!isCollapsed && showAssistantDivider && (
+                          <div className="flex border-b bg-muted/20" data-testid={`assistant-divider-${currentGroup}`}>
+                            <div className="w-48 shrink-0 px-3 py-1 border-r sticky left-0 z-10 bg-muted/20 flex items-center gap-2">
+                              <div className="w-2" />
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Assistants</span>
                             </div>
                             {weekDays.map((day) => (
                               <div key={day.iso} className="flex-1 min-w-[140px] border-r last:border-r-0" />
