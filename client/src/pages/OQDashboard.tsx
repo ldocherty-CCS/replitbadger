@@ -306,8 +306,9 @@ export default function OQDashboard() {
   const oosGroupNames = useMemo(() => {
     const groups: string[] = [];
     oosOperatorMatrix.forEach(row => {
-      if (!groups.includes(row.operator.groupName)) {
-        groups.push(row.operator.groupName);
+      const gn = row.operator.groupName || "Unassigned";
+      if (!groups.includes(gn)) {
+        groups.push(gn);
       }
     });
     return groups;
@@ -474,7 +475,7 @@ export default function OQDashboard() {
     const rows: JSX.Element[] = [];
 
     oosGroupNames.forEach(groupName => {
-      const groupRows = oosOperatorMatrix.filter(row => row.operator.groupName === groupName);
+      const groupRows = oosOperatorMatrix.filter(row => (row.operator.groupName || "Unassigned") === groupName);
       rows.push(
         <tr key={`oos-group-${groupName}`} className="border-b bg-muted/20">
           <td colSpan={qualifications.length + 2} className="px-3 py-1">
@@ -491,7 +492,10 @@ export default function OQDashboard() {
   }
 
   const isImageUrl = (url: string) => {
-    return url && (url.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i) || url.startsWith("/objects/"));
+    if (!url) return false;
+    if (url.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) return true;
+    if (formData.documentName && formData.documentName.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i)) return true;
+    return false;
   };
 
   return (
