@@ -110,6 +110,15 @@ export const operatorTimeOff = pgTable("operator_time_off", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const operatorAvailability = pgTable("operator_availability", {
+  id: serial("id").primaryKey(),
+  operatorId: integer("operator_id").references(() => operators.id, { onDelete: "cascade" }).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const operatorQualifications = pgTable("operator_qualifications", {
   id: serial("id").primaryKey(),
   operatorId: integer("operator_id").references(() => operators.id, { onDelete: "cascade" }).notNull(),
@@ -133,6 +142,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, created
 export const insertQualificationSchema = createInsertSchema(qualifications).omit({ id: true, createdAt: true });
 export const insertOperatorQualificationSchema = createInsertSchema(operatorQualifications).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertOperatorTimeOffSchema = createInsertSchema(operatorTimeOff).omit({ id: true, createdAt: true });
+export const insertOperatorAvailabilitySchema = createInsertSchema(operatorAvailability).omit({ id: true, createdAt: true });
 
 // === EXPLICIT API TYPES ===
 
@@ -143,6 +153,7 @@ export type Job = typeof jobs.$inferSelect;
 export type Qualification = typeof qualifications.$inferSelect;
 export type OperatorQualification = typeof operatorQualifications.$inferSelect;
 export type OperatorTimeOff = typeof operatorTimeOff.$inferSelect;
+export type OperatorAvailability = typeof operatorAvailability.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertOperator = z.infer<typeof insertOperatorSchema>;
@@ -151,6 +162,7 @@ export type InsertJob = z.infer<typeof insertJobSchema>;
 export type InsertQualification = z.infer<typeof insertQualificationSchema>;
 export type InsertOperatorQualification = z.infer<typeof insertOperatorQualificationSchema>;
 export type InsertOperatorTimeOff = z.infer<typeof insertOperatorTimeOffSchema>;
+export type InsertOperatorAvailability = z.infer<typeof insertOperatorAvailabilitySchema>;
 
 export type OperatorQualificationWithDetails = OperatorQualification & {
   operator?: Operator;

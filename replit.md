@@ -104,11 +104,15 @@ Jobs use a color-coded status system critical for visual hierarchy:
 Operators have `truckLat` and `truckLng` fields for mapping their truck parking location on the dashboard map.
 
 ### Out-of-State Operator Availability
-- Out-of-state operators (`isOutOfState=true`) have optional `availableFrom` and `availableTo` text date fields (YYYY-MM-DD format)
-- These define the window when the operator is working with us
-- Days outside this window are treated as OFF on the schedule board (red background, "OFF" label, truck not counted in availability)
-- The operator form shows "Here From" / "Here Until" date pickers when "Out of State" is checked
-- Availability integrates with the same `operatorOffDays` Set used by the time-off system
+- Out-of-state operators (`isOutOfState=true`) use the `operator_availability` table for tracking multiple visit windows
+- Each availability window has `startDate`, `endDate`, `notes`, and `operatorId` fields
+- Days outside any active availability window are treated as OFF on the schedule board (red background, "OFF" label, truck not counted in availability)
+- Operator cards show a "Manage" button for out-of-state operators to open the availability management dialog
+- AvailabilityDialog allows adding, editing, and deleting availability windows with color-coded status (active=green, upcoming=blue, past=dimmed)
+- Legacy `availableFrom`/`availableTo` fields on operators are still supported as fallback when no availability records exist
+- API: `GET /api/operator-availability?operatorId=X`, `POST /api/operator-availability`, `PUT /api/operator-availability/:id`, `DELETE /api/operator-availability/:id`
+- Hook: `useOperatorAvailability(operatorId)` for per-operator, `useAllOperatorAvailability()` for all records
+- Removing an off-day for an out-of-state operator on the schedule board creates or extends an availability window
 
 ### Operator Time Off
 - `operator_time_off` table stores date ranges (startDate, endDate) with operator reference and optional reason

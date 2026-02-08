@@ -1,5 +1,6 @@
 import { useOperators, useCreateOperator, useDeleteOperator, useUpdateOperator } from "@/hooks/use-operators";
 import { useQualifications, useCreateQualification } from "@/hooks/use-qualifications";
+import { useOperatorAvailability, useCreateOperatorAvailability, useUpdateOperatorAvailability, useDeleteOperatorAvailability } from "@/hooks/use-operator-availability";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,12 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown, MapPinOff } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown, MapPinOff, Calendar, Clock } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getOperatorColor, getOperatorTypeLabel } from "@/lib/operator-colors";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { format, parseISO, isPast, isWithinInterval, isFuture } from "date-fns";
 import {
   Select,
   SelectContent,
@@ -37,6 +39,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import type { OperatorAvailability } from "@shared/schema";
 
 export default function Operators() {
   const { data: operators, isLoading } = useOperators();
@@ -44,6 +47,7 @@ export default function Operators() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOp, setEditingOp] = useState<any>(null);
+  const [availabilityOp, setAvailabilityOp] = useState<any>(null);
 
   const filteredOperators = operators?.filter(op => 
     op.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -124,11 +128,20 @@ export default function Operators() {
                     <div className="font-medium text-right truncate">
                       {op.isOutOfState ? "Near prev. job" : (op.truckLocation || "N/A")}
                     </div>
-                    {op.isOutOfState && (op.availableFrom || op.availableTo) && (
+                    {op.isOutOfState && (
                       <>
-                        <div className="text-muted-foreground">Available:</div>
-                        <div className="font-medium text-right text-xs">
-                          {op.availableFrom || "?"} — {op.availableTo || "?"}
+                        <div className="text-muted-foreground">Availability:</div>
+                        <div className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => setAvailabilityOp(op)}
+                            data-testid={`button-availability-${op.id}`}
+                          >
+                            <Calendar className="w-3 h-3" />
+                            Manage
+                          </Button>
                         </div>
                       </>
                     )}
@@ -160,6 +173,14 @@ export default function Operators() {
         onOpenChange={setIsDialogOpen} 
         initialData={editingOp} 
       />
+
+      {availabilityOp && (
+        <AvailabilityDialog
+          open={!!availabilityOp}
+          onOpenChange={(open) => { if (!open) setAvailabilityOp(null); }}
+          operator={availabilityOp}
+        />
+      )}
     </div>
   );
 }
@@ -408,27 +429,8 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
               </div>
             </div>
             {isOutOfState && (
-              <div className="grid grid-cols-2 gap-3 pl-7">
-                <div className="space-y-1">
-                  <Label className="text-xs">Here From</Label>
-                  <Input
-                    type="date"
-                    value={availableFrom}
-                    onChange={(e) => setAvailableFrom(e.target.value)}
-                    data-testid="input-available-from"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Here Until</Label>
-                  <Input
-                    type="date"
-                    value={availableTo}
-                    onChange={(e) => setAvailableTo(e.target.value)}
-                    min={availableFrom || undefined}
-                    data-testid="input-available-to"
-                  />
-                </div>
-                <p className="col-span-2 text-xs text-muted-foreground">Set the dates this operator will be available. Days outside this range won't count as an available truck.</p>
+              <div className="pl-7">
+                <p className="text-xs text-muted-foreground">After creating this operator, use the "Manage" button on their card to set availability windows.</p>
               </div>
             )}
           </div>
@@ -447,6 +449,206 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
             </Button>
           </div>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AvailabilityDialog({ open, onOpenChange, operator }: { open: boolean; onOpenChange: (open: boolean) => void; operator: any }) {
+  const { data: records, isLoading } = useOperatorAvailability(operator.id);
+  const createAvail = useCreateOperatorAvailability();
+  const updateAvail = useUpdateOperatorAvailability();
+  const deleteAvail = useDeleteOperatorAvailability();
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setStartDate("");
+    setEndDate("");
+    setNotes("");
+  };
+
+  const handleEdit = (record: OperatorAvailability) => {
+    setEditingId(record.id);
+    setStartDate(record.startDate);
+    setEndDate(record.endDate);
+    setNotes(record.notes || "");
+    setShowForm(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!startDate || !endDate) return;
+    try {
+      if (editingId) {
+        await updateAvail.mutateAsync({ id: editingId, startDate, endDate, notes: notes || null });
+      } else {
+        await createAvail.mutateAsync({ operatorId: operator.id, startDate, endDate, notes: notes || null });
+      }
+      resetForm();
+    } catch {}
+  };
+
+  const getStatus = (record: OperatorAvailability) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = parseISO(record.startDate);
+    const end = parseISO(record.endDate);
+    if (today >= start && today <= end) return "active";
+    if (end < today) return "past";
+    return "upcoming";
+  };
+
+  const sortedRecords = [...(records || [])].sort((a, b) => {
+    const statusOrder = { active: 0, upcoming: 1, past: 2 };
+    const sa = statusOrder[getStatus(a)];
+    const sb = statusOrder[getStatus(b)];
+    if (sa !== sb) return sa - sb;
+    return b.startDate > a.startDate ? 1 : -1;
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+              style={{ backgroundColor: getOperatorColor(operator) }}
+            >
+              {operator.name.substring(0, 2).toUpperCase()}
+            </div>
+            {operator.name} — Availability
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {isLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : sortedRecords.length === 0 && !showForm ? (
+            <div className="text-center py-6 text-muted-foreground text-sm">
+              No availability windows set yet.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {sortedRecords.map((record) => {
+                const status = getStatus(record);
+                return (
+                  <div
+                    key={record.id}
+                    className={cn(
+                      "flex items-center justify-between gap-2 p-3 rounded-md border",
+                      status === "active" && "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30",
+                      status === "past" && "opacity-60",
+                      status === "upcoming" && "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30"
+                    )}
+                    data-testid={`availability-record-${record.id}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">
+                          {format(parseISO(record.startDate), "MMM d, yyyy")} — {format(parseISO(record.endDate), "MMM d, yyyy")}
+                        </span>
+                        <Badge
+                          variant={status === "active" ? "default" : "secondary"}
+                          className={cn(
+                            "text-[10px]",
+                            status === "active" && "bg-green-600 hover:bg-green-700"
+                          )}
+                        >
+                          {status === "active" ? "Current" : status === "upcoming" ? "Upcoming" : "Past"}
+                        </Badge>
+                      </div>
+                      {record.notes && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{record.notes}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(record)} data-testid={`button-edit-avail-${record.id}`}>
+                        <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm("Remove this availability window?")) {
+                            deleteAvail.mutate(record.id);
+                          }
+                        }}
+                        data-testid={`button-delete-avail-${record.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {showForm ? (
+            <form onSubmit={handleSubmit} className="space-y-3 border-t pt-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Arriving</Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    required
+                    data-testid="input-avail-start"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Departing</Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    min={startDate || undefined}
+                    required
+                    data-testid="input-avail-end"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Notes (optional)</Label>
+                <Input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. Coming from Texas crew"
+                  data-testid="input-avail-notes"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={resetForm} data-testid="button-cancel-avail">
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={createAvail.isPending || updateAvail.isPending} data-testid="button-save-avail">
+                  {(createAvail.isPending || updateAvail.isPending) && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                  {editingId ? "Update" : "Add"}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowForm(true)}
+              data-testid="button-add-availability"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Availability Window
+            </Button>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -28,6 +28,7 @@ import { TimeOffDialog } from "@/components/TimeOffDialog";
 import { JobDetailsDialog } from "@/components/JobDetailsDialog";
 import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
 import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff } from "@/hooks/use-time-off";
+import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
 import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -396,6 +397,7 @@ function DesktopDashboard() {
     startDate: weekDays[0].iso,
     endDate: weekDays[6].iso,
   });
+  const { data: availabilityRecords } = useAllOperatorAvailability();
 
   const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } });
@@ -537,44 +539,45 @@ function DesktopDashboard() {
     } else {
       const op = operators?.find((o) => o.id === operatorId);
       if (op?.isOutOfState) {
-        const updates: Record<string, string> = {};
-        if (op.availableFrom && date < op.availableFrom) {
-          updates.availableFrom = date;
-        }
-        if (op.availableTo && date > op.availableTo) {
-          updates.availableTo = date;
-        }
-        if (!op.availableFrom && op.availableTo && date > op.availableTo) {
-          updates.availableTo = date;
-        }
-        if (op.availableFrom && !op.availableTo && date < op.availableFrom) {
-          updates.availableFrom = date;
-        }
-        if (!op.availableFrom && !op.availableTo) {
-          updates.availableFrom = date;
-          updates.availableTo = date;
-        }
-        if (Object.keys(updates).length > 0) {
-          try {
-            const res = await fetch(`/api/operators/${operatorId}`, {
+        const opWindows = availabilityRecords?.filter((r) => r.operatorId === operatorId) || [];
+        const adjacentWindow = opWindows.find((w) => {
+          const dayBefore = format(addDays(parseISO(date), -1), "yyyy-MM-dd");
+          const dayAfter = format(addDays(parseISO(date), 1), "yyyy-MM-dd");
+          return w.endDate === dayBefore || w.startDate === dayAfter ||
+            (date >= w.startDate && date <= w.endDate);
+        });
+        try {
+          if (adjacentWindow) {
+            const newStart = date < adjacentWindow.startDate ? date : adjacentWindow.startDate;
+            const newEnd = date > adjacentWindow.endDate ? date : adjacentWindow.endDate;
+            const res = await fetch(`/api/operator-availability/${adjacentWindow.id}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(updates),
+              body: JSON.stringify({ startDate: newStart, endDate: newEnd }),
               credentials: "include",
             });
             if (res.ok) {
-              queryClient.invalidateQueries({ queryKey: ["/api/operators"] });
-              toast({ title: "Availability Updated", description: `Operator is now available on ${date}` });
-            } else {
-              toast({ title: "Error", description: "Failed to update availability", variant: "destructive" });
+              queryClient.invalidateQueries({ queryKey: ["/api/operator-availability"] });
+              toast({ title: "Availability Updated", description: `Window extended to include ${date}` });
             }
-          } catch {
-            toast({ title: "Error", description: "Failed to update availability", variant: "destructive" });
+          } else {
+            const res = await fetch("/api/operator-availability", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ operatorId, startDate: date, endDate: date }),
+              credentials: "include",
+            });
+            if (res.ok) {
+              queryClient.invalidateQueries({ queryKey: ["/api/operator-availability"] });
+              toast({ title: "Availability Added", description: `Operator marked available on ${date}` });
+            }
           }
+        } catch {
+          toast({ title: "Error", description: "Failed to update availability", variant: "destructive" });
         }
       }
     }
-  }, [timeOffRecords, operators, deleteTimeOff, removeTimeOffDay, toast, queryClient]);
+  }, [timeOffRecords, operators, availabilityRecords, deleteTimeOff, removeTimeOffDay, toast, queryClient]);
 
   const toggleGroup = useCallback((groupName: string) => {
     setCollapsedGroups(prev => {
@@ -886,16 +889,29 @@ function DesktopDashboard() {
   });
 
   operators?.forEach((op) => {
-    if (op.isOutOfState && (op.availableFrom || op.availableTo)) {
-      weekDays.forEach((day) => {
-        const dayStr = day.iso;
-        if (op.availableFrom && dayStr < op.availableFrom) {
-          operatorOffDays.add(`${op.id}-${dayStr}`);
-        }
-        if (op.availableTo && dayStr > op.availableTo) {
-          operatorOffDays.add(`${op.id}-${dayStr}`);
-        }
-      });
+    if (op.isOutOfState) {
+      const opAvailWindows = availabilityRecords?.filter((r) => r.operatorId === op.id) || [];
+      if (opAvailWindows.length > 0) {
+        weekDays.forEach((day) => {
+          const dayStr = day.iso;
+          const isAvailable = opAvailWindows.some(
+            (w) => dayStr >= w.startDate && dayStr <= w.endDate
+          );
+          if (!isAvailable) {
+            operatorOffDays.add(`${op.id}-${dayStr}`);
+          }
+        });
+      } else if (op.availableFrom || op.availableTo) {
+        weekDays.forEach((day) => {
+          const dayStr = day.iso;
+          if (op.availableFrom && dayStr < op.availableFrom) {
+            operatorOffDays.add(`${op.id}-${dayStr}`);
+          }
+          if (op.availableTo && dayStr > op.availableTo) {
+            operatorOffDays.add(`${op.id}-${dayStr}`);
+          }
+        });
+      }
     }
   });
 

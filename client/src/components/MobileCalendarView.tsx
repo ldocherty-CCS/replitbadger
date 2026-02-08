@@ -6,6 +6,7 @@ import { useJobs } from "@/hooks/use-jobs";
 import { useUpdateJob } from "@/hooks/use-jobs";
 import { useOperators } from "@/hooks/use-operators";
 import { useTimeOff } from "@/hooks/use-time-off";
+import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Job, Operator } from "@shared/schema";
@@ -173,6 +174,7 @@ export function MobileCalendarView() {
     startDate: weekDays[0].iso,
     endDate: weekDays[6].iso,
   });
+  const { data: availabilityRecords } = useAllOperatorAvailability();
 
   const updateJob = useUpdateJob();
   const { toast } = useToast();
@@ -201,19 +203,31 @@ export function MobileCalendarView() {
       }
     });
     operators?.forEach((op) => {
-      if (op.isOutOfState && (op.availableFrom || op.availableTo)) {
-        weekDays.forEach((day) => {
-          if (op.availableFrom && day.iso < op.availableFrom) {
-            offDays.add(`${op.id}-${day.iso}`);
-          }
-          if (op.availableTo && day.iso > op.availableTo) {
-            offDays.add(`${op.id}-${day.iso}`);
-          }
-        });
+      if (op.isOutOfState) {
+        const opAvailWindows = availabilityRecords?.filter((r) => r.operatorId === op.id) || [];
+        if (opAvailWindows.length > 0) {
+          weekDays.forEach((day) => {
+            const isAvailable = opAvailWindows.some(
+              (w) => day.iso >= w.startDate && day.iso <= w.endDate
+            );
+            if (!isAvailable) {
+              offDays.add(`${op.id}-${day.iso}`);
+            }
+          });
+        } else if (op.availableFrom || op.availableTo) {
+          weekDays.forEach((day) => {
+            if (op.availableFrom && day.iso < op.availableFrom) {
+              offDays.add(`${op.id}-${day.iso}`);
+            }
+            if (op.availableTo && day.iso > op.availableTo) {
+              offDays.add(`${op.id}-${day.iso}`);
+            }
+          });
+        }
       }
     });
     return offDays;
-  }, [timeOffRecords, operators, weekDays]);
+  }, [timeOffRecords, operators, availabilityRecords, weekDays]);
 
   const { jobsMap, assistantJobIds } = useMemo(() => {
     const map: Record<string, Job[]> = {};

@@ -341,6 +341,53 @@ export async function registerRoutes(
     }
   });
 
+  // === Operator Availability ===
+  app.get("/api/operator-availability", async (req, res) => {
+    const operatorId = req.query.operatorId ? Number(req.query.operatorId) : undefined;
+    const results = await storage.getOperatorAvailability(operatorId);
+    res.json(results);
+  });
+
+  app.post("/api/operator-availability", async (req, res) => {
+    try {
+      const input = z.object({
+        operatorId: z.number(),
+        startDate: z.string(),
+        endDate: z.string(),
+        notes: z.string().optional().nullable(),
+      }).parse(req.body);
+      const created = await storage.createOperatorAvailability(input);
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create availability" });
+    }
+  });
+
+  app.put("/api/operator-availability/:id", async (req, res) => {
+    try {
+      const input = z.object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        notes: z.string().optional().nullable(),
+      }).parse(req.body);
+      const updated = await storage.updateOperatorAvailability(Number(req.params.id), input);
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to update availability" });
+    }
+  });
+
+  app.delete("/api/operator-availability/:id", async (req, res) => {
+    await storage.deleteOperatorAvailability(Number(req.params.id));
+    res.status(204).send();
+  });
+
   // === Multi-day Job Series ===
   app.post("/api/jobs/series", async (req, res) => {
     try {

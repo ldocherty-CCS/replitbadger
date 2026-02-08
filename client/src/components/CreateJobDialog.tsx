@@ -33,6 +33,7 @@ import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff, Copy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTimeOff } from "@/hooks/use-time-off";
+import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +79,7 @@ export function CreateJobDialog({
   const updateJob = useUpdateJob();
   const createJobSeries = useCreateJobSeries();
   const { data: timeOffRecords } = useTimeOff();
+  const { data: availabilityRecords } = useAllOperatorAvailability();
   const { toast } = useToast();
   const [isMultiDay, setIsMultiDay] = useState(false);
   const [endDate, setEndDate] = useState("");
@@ -168,18 +170,28 @@ export function CreateJobDialog({
     });
     if (watchedDate) {
       operators?.forEach((op) => {
-        if (op.isOutOfState && (op.availableFrom || op.availableTo)) {
-          if (op.availableFrom && watchedDate < op.availableFrom) {
-            offDays.add(`${op.id}-${watchedDate}`);
-          }
-          if (op.availableTo && watchedDate > op.availableTo) {
-            offDays.add(`${op.id}-${watchedDate}`);
+        if (op.isOutOfState) {
+          const opAvailWindows = availabilityRecords?.filter((r) => r.operatorId === op.id) || [];
+          if (opAvailWindows.length > 0) {
+            const isAvailable = opAvailWindows.some(
+              (w) => watchedDate >= w.startDate && watchedDate <= w.endDate
+            );
+            if (!isAvailable) {
+              offDays.add(`${op.id}-${watchedDate}`);
+            }
+          } else if (op.availableFrom || op.availableTo) {
+            if (op.availableFrom && watchedDate < op.availableFrom) {
+              offDays.add(`${op.id}-${watchedDate}`);
+            }
+            if (op.availableTo && watchedDate > op.availableTo) {
+              offDays.add(`${op.id}-${watchedDate}`);
+            }
           }
         }
       });
     }
     return offDays;
-  }, [timeOffRecords, operators, watchedDate]);
+  }, [timeOffRecords, operators, availabilityRecords, watchedDate]);
 
   const isOperatorOff = useMemo(() => {
     if (!watchedOperatorId || !watchedDate) return false;

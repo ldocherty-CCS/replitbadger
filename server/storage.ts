@@ -1,8 +1,8 @@
 import { db } from "./db";
 import {
-  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff,
-  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff,
-  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff,
+  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff, operatorAvailability,
+  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff, type OperatorAvailability,
+  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff, type InsertOperatorAvailability,
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
   type OperatorQualificationWithDetails
 } from "@shared/schema";
@@ -46,6 +46,12 @@ export interface IStorage {
   createOperatorTimeOff(timeOff: InsertOperatorTimeOff): Promise<OperatorTimeOff>;
   updateOperatorTimeOff(id: number, data: { startDate?: string; endDate?: string }): Promise<OperatorTimeOff>;
   deleteOperatorTimeOff(id: number): Promise<void>;
+
+  // Operator Availability
+  getOperatorAvailability(operatorId?: number): Promise<(OperatorAvailability & { operator?: Operator })[]>;
+  createOperatorAvailability(avail: InsertOperatorAvailability): Promise<OperatorAvailability>;
+  updateOperatorAvailability(id: number, data: Partial<InsertOperatorAvailability>): Promise<OperatorAvailability>;
+  deleteOperatorAvailability(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -74,6 +80,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteOperator(id: number): Promise<void> {
+    await db.update(jobs).set({ operatorId: null }).where(eq(jobs.operatorId, id));
+    await db.update(jobs).set({ assistantOperatorId: null }).where(eq(jobs.assistantOperatorId, id));
+    await db.update(jobs).set({ remoteHoseOperatorId: null }).where(eq(jobs.remoteHoseOperatorId, id));
     await db.delete(operators).where(eq(operators.id, id));
   }
 
@@ -337,6 +346,47 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOperatorTimeOff(id: number): Promise<void> {
     await db.delete(operatorTimeOff).where(eq(operatorTimeOff.id, id));
+  }
+
+  // Operator Availability
+  async getOperatorAvailability(operatorId?: number): Promise<(OperatorAvailability & { operator?: Operator })[]> {
+    let query = db.select({
+      id: operatorAvailability.id,
+      operatorId: operatorAvailability.operatorId,
+      startDate: operatorAvailability.startDate,
+      endDate: operatorAvailability.endDate,
+      notes: operatorAvailability.notes,
+      createdAt: operatorAvailability.createdAt,
+      operator: operators,
+    })
+    .from(operatorAvailability)
+    .leftJoin(operators, eq(operatorAvailability.operatorId, operators.id));
+
+    if (operatorId) {
+      // @ts-ignore
+      query = query.where(eq(operatorAvailability.operatorId, operatorId));
+    }
+
+    // @ts-ignore
+    const results = await query.orderBy(operatorAvailability.startDate);
+    return results.map(row => ({
+      ...row,
+      operator: row.operator || undefined,
+    }));
+  }
+
+  async createOperatorAvailability(avail: InsertOperatorAvailability): Promise<OperatorAvailability> {
+    const [created] = await db.insert(operatorAvailability).values(avail).returning();
+    return created;
+  }
+
+  async updateOperatorAvailability(id: number, data: Partial<InsertOperatorAvailability>): Promise<OperatorAvailability> {
+    const [updated] = await db.update(operatorAvailability).set(data).where(eq(operatorAvailability.id, id)).returning();
+    return updated;
+  }
+
+  async deleteOperatorAvailability(id: number): Promise<void> {
+    await db.delete(operatorAvailability).where(eq(operatorAvailability.id, id));
   }
 }
 
