@@ -403,41 +403,21 @@ export function DashboardMapPanel({ operators: propOperators }: DashboardMapPane
           <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)} data-testid="button-map-prev-week">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="flex items-center gap-1.5 relative">
-            <button
-              type="button"
-              className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer"
-              onClick={() => { const el = document.getElementById("map-range-start-input") as HTMLInputElement; if (el) { el.focus(); el.click(); } }}
-              data-testid="display-map-range-start"
-            >
-              {format(parseISO(rangeStart), "EEE, MMM d")}
-            </button>
+          <div className="flex items-center gap-1.5">
             <input
-              id="map-range-start-input"
               type="date"
               value={rangeStart}
               onChange={(e) => setRangeStart(e.target.value)}
-              className="absolute opacity-0 w-px h-px overflow-hidden"
+              className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer bg-transparent border-none outline-none"
               data-testid="input-map-range-start"
-              tabIndex={-1}
             />
             <span className="text-xs text-muted-foreground">&mdash;</span>
-            <button
-              type="button"
-              className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer"
-              onClick={() => { const el = document.getElementById("map-range-end-input") as HTMLInputElement; if (el) { el.focus(); el.click(); } }}
-              data-testid="display-map-range-end"
-            >
-              {format(parseISO(rangeEnd), "EEE, MMM d")}
-            </button>
             <input
-              id="map-range-end-input"
               type="date"
               value={rangeEnd}
               onChange={(e) => setRangeEnd(e.target.value)}
-              className="absolute opacity-0 w-px h-px overflow-hidden"
+              className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer bg-transparent border-none outline-none"
               data-testid="input-map-range-end"
-              tabIndex={-1}
             />
           </div>
           <Button variant="outline" size="icon" onClick={() => navigateWeek(1)} data-testid="button-map-next-week">
