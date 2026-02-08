@@ -30,7 +30,7 @@ import { JobDetailsDialog } from "@/components/JobDetailsDialog";
 import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
 import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
-import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, Eye, Search, X, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, Eye, Search, X, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -47,7 +47,7 @@ import { getOperatorColor } from "@/lib/operator-colors";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { DroppableDay } from "@/components/DroppableDay";
 import { useToast } from "@/hooks/use-toast";
-import { useGoogleMapsReady } from "@/components/AddressAutocomplete";
+import { DashboardMapPanel } from "@/components/DashboardMapPanel";
 
 const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   dispatched: { hex: "#22c55e", label: "Dispatched" },
@@ -60,22 +60,6 @@ const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   cancelled: { hex: "#8b8b8b", label: "Cancelled" },
   standby: { hex: "#8b5cf6", label: "Standby" },
 };
-
-const DEFAULT_CENTER: [number, number] = [43.0389, -87.9065];
-
-function escapeHtml(str: string): string {
-  const div = document.createElement("div");
-  div.appendChild(document.createTextNode(str));
-  return div.innerHTML;
-}
-
-function createJobMarkerSvg(color: string): string {
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="${color}" stroke="white" stroke-width="3"/></svg>`)}`;
-}
-
-function createTruckMarkerSvg(color: string): string {
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><rect x="2" y="2" width="24" height="24" rx="4" fill="${color}" stroke="white" stroke-width="3"/><g transform="translate(6,6)"><path d="M10 14V4a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 1 4v8.25a.75.75 0 0 0 .75.75h1.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.25 14H6.75" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="M14.25 14h1.5a.75.75 0 0 0 .75-.75v-2.74a.75.75 0 0 0-.165-.468l-2.61-3.26A.75.75 0 0 0 13.14 6.5H10.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12.75" cy="14" r="1.5" fill="none" stroke="white" stroke-width="1.5"/><circle cx="5.25" cy="14" r="1.5" fill="none" stroke="white" stroke-width="1.5"/></g></svg>`)}`;
-}
 
 function DayCell({ 
   date, 
@@ -365,7 +349,6 @@ function DesktopDashboard() {
   const [holdDialog, setHoldDialog] = useState<{ open: boolean; date: string; operatorId: number }>({ open: false, date: "", operatorId: 0 });
   const [timeOffOpen, setTimeOffOpen] = useState(false);
   const [timeOffDefaultOp, setTimeOffDefaultOp] = useState<number | null>(null);
-  const [mapDate, setMapDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [noteDialog, setNoteDialog] = useState<{ open: boolean; date: string; operatorId: number; editJob?: any }>({ open: false, date: "", operatorId: 0 });
   const [viewingJob, setViewingJob] = useState<Job | null>(null);
@@ -397,12 +380,6 @@ function DesktopDashboard() {
   const deleteJob = useDeleteJob();
   const duplicateJob = useDuplicateJob();
   const { toast } = useToast();
-
-  const mapRef = useRef<HTMLDivElement>(null);
-  const googleMap = useRef<google.maps.Map | null>(null);
-  const googleMarkers = useRef<google.maps.Marker[]>([]);
-  const googleInfoWindow = useRef<google.maps.InfoWindow | null>(null);
-  const mapsReady = useGoogleMapsReady();
 
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -648,215 +625,6 @@ function DesktopDashboard() {
     document.addEventListener("mouseup", handleMouseUp);
   }, []);
 
-  useEffect(() => {
-    if (!mapVisible || !mapsReady || !mapRef.current) {
-      return;
-    }
-
-    if (googleMap.current) {
-      const mapDiv = googleMap.current.getDiv();
-      if (mapDiv && mapDiv.parentElement) return;
-      googleMarkers.current.forEach(m => m.setMap(null));
-      googleMarkers.current = [];
-      googleMap.current = null;
-    }
-
-    googleMap.current = new google.maps.Map(mapRef.current, {
-      center: { lat: DEFAULT_CENTER[0], lng: DEFAULT_CENTER[1] },
-      zoom: 10,
-      gestureHandling: "greedy",
-      disableDefaultUI: false,
-      zoomControl: true,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
-    });
-
-    googleInfoWindow.current = new google.maps.InfoWindow();
-
-    return () => {
-      googleMarkers.current.forEach(m => m.setMap(null));
-      googleMarkers.current = [];
-      googleMap.current = null;
-    };
-  }, [mapVisible, mapsReady]);
-
-  useEffect(() => {
-    if (!mapVisible && googleMap.current) {
-      googleMarkers.current.forEach(m => m.setMap(null));
-      googleMarkers.current = [];
-      googleMap.current = null;
-    }
-  }, [mapVisible]);
-
-  const mapFilteredJobs = useMemo(() => {
-    if (!jobs) return [];
-    return jobs.filter((j: any) => j.scheduledDate === mapDate);
-  }, [jobs, mapDate]);
-
-  const mapJobsWithCoords = mapFilteredJobs.filter((j: any) => j.lat != null && j.lng != null).length;
-  const mapTruckMarkers = operators?.filter((op: any) => op.operatorType !== "assistant" && op.truckLat != null && op.truckLng != null).length || 0;
-
-  useEffect(() => {
-    if (!googleMap.current) return;
-
-    googleMarkers.current.forEach(m => m.setMap(null));
-    googleMarkers.current = [];
-
-    const bounds = new google.maps.LatLngBounds();
-    let hasPoints = false;
-
-    if (operators) {
-      operators.filter((op: any) => op.operatorType !== "assistant").forEach((op: any) => {
-        let markerLat = op.truckLat;
-        let markerLng = op.truckLng;
-        let locationLabel = op.truckLocation || "Unknown";
-        let locationNote = "Truck Parked At";
-
-        if (op.isOutOfState && jobs) {
-          const prevDayJob = jobs
-            .filter((j: any) => j.operatorId === op.id && j.lat != null && j.lng != null && j.scheduledDate <= mapDate)
-            .sort((a: any, b: any) => b.scheduledDate.localeCompare(a.scheduledDate))[0];
-
-          if (prevDayJob) {
-            markerLat = prevDayJob.lat;
-            markerLng = prevDayJob.lng;
-            locationLabel = prevDayJob.address || "Previous job site";
-            locationNote = "Out-of-State — Near Previous Job";
-          }
-        }
-
-        if (markerLat != null && markerLng != null) {
-          bounds.extend({ lat: markerLat, lng: markerLng });
-          hasPoints = true;
-
-          const marker = new google.maps.Marker({
-            map: googleMap.current!,
-            position: { lat: markerLat, lng: markerLng },
-            title: op.name,
-            icon: {
-              url: createTruckMarkerSvg(getOperatorColor(op)),
-              scaledSize: new google.maps.Size(28, 28),
-            },
-          });
-
-          const outOfStateBadge = op.isOutOfState
-            ? `<div style="font-size:10px;color:#f59e0b;font-weight:600;margin-top:4px;">OUT OF STATE</div>`
-            : '';
-          const infoContent = `
-            <div style="min-width: 160px; font-family: system-ui, sans-serif;">
-              <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${escapeHtml(op.name)}</div>
-              ${outOfStateBadge}
-              <div style="font-size: 11px; color: #888;">${escapeHtml(locationNote)}</div>
-              <div style="font-size: 12px; margin-top: 2px;">${escapeHtml(locationLabel)}</div>
-              <div style="font-size: 11px; color: #888; margin-top: 4px;">${escapeHtml(op.groupName)}</div>
-            </div>
-          `;
-
-          marker.addListener("click", () => {
-            googleInfoWindow.current?.setContent(infoContent);
-            googleInfoWindow.current?.open(googleMap.current!, marker);
-          });
-
-          googleMarkers.current.push(marker);
-        }
-      });
-    }
-
-    mapFilteredJobs.forEach((job: any) => {
-      if (job.lat == null || job.lng == null) return;
-      const lat = job.lat!;
-      const lng = job.lng!;
-      bounds.extend({ lat, lng });
-      hasPoints = true;
-
-      const markerColor = STATUS_COLORS[job.status]?.hex || "#9ca3af";
-
-      const marker = new google.maps.Marker({
-        map: googleMap.current!,
-        position: { lat, lng },
-        title: job.customer?.name || "Job",
-        icon: {
-          url: createJobMarkerSvg(markerColor),
-          scaledSize: new google.maps.Size(24, 24),
-        },
-      });
-
-      const operatorName = escapeHtml(job.operator?.name || "Unassigned");
-      const customerName = escapeHtml(job.customer?.name || "Unknown");
-      const statusLabel = STATUS_COLORS[job.status]?.label || job.status;
-      const assignedOp = operators?.find((o: any) => o.id === job.operatorId);
-      const hasTruckLoc = assignedOp && assignedOp.truckLat != null && assignedOp.truckLng != null;
-      const travelTimeId = `travel-time-${job.id}`;
-      const travelBtnId = `travel-btn-${job.id}`;
-
-      const infoContent = `
-        <div style="min-width: 180px; font-family: system-ui, sans-serif;">
-          <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${customerName}</div>
-          <div style="font-size: 11px; color: #666;">${escapeHtml(job.scope || "")}</div>
-          <hr style="margin: 4px 0; border-color: #eee;" />
-          <div style="font-size: 11px;"><strong>Operator:</strong> ${operatorName}</div>
-          <div style="font-size: 11px;"><strong>Date:</strong> ${escapeHtml(job.scheduledDate)}</div>
-          <div style="font-size: 11px;"><strong>Time:</strong> ${escapeHtml(job.startTime || "")}</div>
-          <div style="font-size: 11px;"><strong>Status:</strong> 
-            <span style="display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 10px; background: ${markerColor}20; color: ${markerColor}; font-weight: 600;">${escapeHtml(statusLabel)}</span>
-          </div>
-          <div style="font-size: 11px; margin-top: 3px; color: #888;">${escapeHtml(job.address || "")}</div>
-          ${hasTruckLoc ? `
-            <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #eee;">
-              <div id="${travelTimeId}" style="font-size: 11px; color: #666;"></div>
-              <button id="${travelBtnId}" style="font-size: 11px; color: #2563eb; cursor: pointer; background: none; border: none; padding: 2px 0; text-decoration: underline;">
-                Calculate drive time from truck
-              </button>
-            </div>
-          ` : ''}
-        </div>
-      `;
-
-      marker.addListener("click", () => {
-        googleInfoWindow.current?.setContent(infoContent);
-        googleInfoWindow.current?.open(googleMap.current!, marker);
-
-        if (hasTruckLoc) {
-          setTimeout(() => {
-            const btn = document.getElementById(travelBtnId);
-            const display = document.getElementById(travelTimeId);
-            if (btn && display) {
-              btn.addEventListener("click", async () => {
-                btn.textContent = "Calculating...";
-                btn.style.color = "#888";
-                try {
-                  const resp = await fetch(`/api/travel-time?originLat=${assignedOp!.truckLat}&originLng=${assignedOp!.truckLng}&destLat=${lat}&destLng=${lng}`);
-                  const result = await resp.json();
-                  if (result.duration) {
-                    display.innerHTML = `<strong style="color:#16a34a;">${result.duration}</strong> &middot; ${result.distance}`;
-                    btn.style.display = "none";
-                  } else {
-                    display.textContent = "Unable to calculate route";
-                    btn.style.display = "none";
-                  }
-                } catch {
-                  display.textContent = "Error calculating route";
-                  btn.style.display = "none";
-                }
-              });
-            }
-          }, 100);
-        }
-      });
-
-      googleMarkers.current.push(marker);
-    });
-
-    if (hasPoints) {
-      googleMap.current.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
-      const listener = googleMap.current.addListener("idle", () => {
-        const zoom = googleMap.current?.getZoom();
-        if (zoom && zoom > 13) googleMap.current?.setZoom(13);
-        google.maps.event.removeListener(listener);
-      });
-    }
-  }, [mapFilteredJobs, operators, mapDate, mapsReady]);
 
   if (jobsLoading || opsLoading) {
     return (
@@ -949,9 +717,6 @@ function DesktopDashboard() {
       }
     }
   });
-
-  const jobsWithCoords = mapJobsWithCoords;
-  const truckMarkers = mapTruckMarkers;
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-muted/30">
@@ -1392,59 +1157,7 @@ function DesktopDashboard() {
                 style={{ width: `${100 - splitPercent}%` }}
                 data-testid="map-panel"
               >
-                <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-semibold">Map</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => setMapDate(format(addDays(parseISO(mapDate), -1), "yyyy-MM-dd"))}
-                      data-testid="button-map-prev-day"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </Button>
-                    <span className="text-xs font-medium min-w-[80px] text-center" data-testid="text-map-date">
-                      {format(parseISO(mapDate), "EEE M/d")}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => setMapDate(format(addDays(parseISO(mapDate), 1), "yyyy-MM-dd"))}
-                      data-testid="button-map-next-day"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {jobsWithCoords} job{jobsWithCoords !== 1 ? "s" : ""}
-                    </span>
-                    {truckMarkers > 0 && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Truck className="w-3 h-3" />
-                        {truckMarkers}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div ref={mapRef} className="flex-1" data-testid="map-container" />
-                <div className="px-3 py-1.5 border-t bg-muted/20 flex flex-wrap gap-x-3 gap-y-1 shrink-0">
-                  {Object.entries(STATUS_COLORS).map(([key, val]) => {
-                    const count = mapFilteredJobs.filter((j: any) => j.status === key && j.lat != null).length || 0;
-                    if (count === 0) return null;
-                    return (
-                      <div key={key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <div className="w-2 h-2 rounded-full" style={{ background: val.hex }} />
-                        <span>{val.label} ({count})</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <DashboardMapPanel operators={operators} jobs={jobs} />
               </div>
             </>
           )}
