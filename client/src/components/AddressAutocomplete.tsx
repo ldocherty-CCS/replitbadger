@@ -23,56 +23,81 @@ interface AddressAutocompleteProps {
   "data-testid"?: string;
 }
 
-let googleMapsScriptLoaded = false;
-let googleMapsScriptLoading = false;
-const loadCallbacks: (() => void)[] = [];
+let loadCallbacks: (() => void)[] = [];
+let loadingPromise: Promise<void> | null = null;
+
+function isGoogleMapsLoaded(): boolean {
+  return !!(window as any).google?.maps;
+}
+
+function hasGoogleMapsScript(): boolean {
+  return !!document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+}
 
 export function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (googleMapsScriptLoaded && (window as any).google?.maps) {
-      resolve();
-      return;
-    }
+  if (isGoogleMapsLoaded()) {
+    return Promise.resolve();
+  }
 
+  if (loadingPromise) return loadingPromise;
+
+  if (hasGoogleMapsScript()) {
+    loadingPromise = new Promise<void>((resolve) => {
+      let attempts = 0;
+      const check = () => {
+        if (isGoogleMapsLoaded()) {
+          loadingPromise = null;
+          resolve();
+        } else if (attempts++ > 100) {
+          loadingPromise = null;
+          console.error("Google Maps script found but API never loaded");
+          resolve();
+        } else {
+          setTimeout(check, 100);
+        }
+      };
+      check();
+    });
+    return loadingPromise;
+  }
+
+  loadingPromise = new Promise<void>((resolve) => {
     loadCallbacks.push(resolve);
-
-    if (googleMapsScriptLoading) return;
-    googleMapsScriptLoading = true;
 
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker`;
     script.async = true;
     script.defer = true;
     script.onload = () => {
-      googleMapsScriptLoaded = true;
-      googleMapsScriptLoading = false;
+      loadingPromise = null;
       loadCallbacks.forEach((cb) => cb());
-      loadCallbacks.length = 0;
+      loadCallbacks = [];
     };
     script.onerror = () => {
-      googleMapsScriptLoading = false;
+      loadingPromise = null;
       console.error("Failed to load Google Maps script");
       loadCallbacks.forEach((cb) => cb());
-      loadCallbacks.length = 0;
+      loadCallbacks = [];
     };
     document.head.appendChild(script);
   });
+
+  return loadingPromise;
 }
 
 export function useGoogleMapsReady() {
-  const [isReady, setIsReady] = useState(
-    () => googleMapsScriptLoaded && !!(window as any).google?.maps
-  );
+  const [isReady, setIsReady] = useState(isGoogleMapsLoaded);
   const { data: mapsConfig } = useQuery<{ key: string }>({
     queryKey: ["/api/config/maps-key"],
   });
 
   useEffect(() => {
+    if (isReady) return;
     if (!mapsConfig?.key) return;
     loadGoogleMapsScript(mapsConfig.key).then(() => {
       setIsReady(true);
     });
-  }, [mapsConfig?.key]);
+  }, [mapsConfig?.key, isReady]);
 
   return isReady;
 }

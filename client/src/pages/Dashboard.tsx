@@ -615,7 +615,13 @@ function DesktopDashboard() {
       return;
     }
 
-    if (googleMap.current) return;
+    if (googleMap.current) {
+      const mapDiv = googleMap.current.getDiv();
+      if (mapDiv && mapDiv.parentElement) return;
+      googleMarkers.current.forEach(m => m.setMap(null));
+      googleMarkers.current = [];
+      googleMap.current = null;
+    }
 
     googleMap.current = new google.maps.Map(mapRef.current, {
       center: { lat: DEFAULT_CENTER[0], lng: DEFAULT_CENTER[1] },
@@ -630,7 +636,11 @@ function DesktopDashboard() {
 
     googleInfoWindow.current = new google.maps.InfoWindow();
 
-    return () => {};
+    return () => {
+      googleMarkers.current.forEach(m => m.setMap(null));
+      googleMarkers.current = [];
+      googleMap.current = null;
+    };
   }, [mapVisible, mapsReady]);
 
   useEffect(() => {
