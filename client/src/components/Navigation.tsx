@@ -29,7 +29,7 @@ export function Navigation() {
     { href: "/", label: "Schedule", icon: CalendarDays },
     { href: "/operators", label: "Operators", icon: Truck },
     { href: "/customers", label: "Customers", icon: Users },
-    { href: "/oq", label: "OQ Tracker", icon: ShieldCheck },
+    { href: "/oq", label: "Qualifications", icon: ShieldCheck },
     { href: "/map", label: "Map", icon: MapPin },
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
   ];

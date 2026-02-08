@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useUpload } from "@/hooks/use-upload";
 import { getOperatorColor } from "@/lib/operator-colors";
 import { format, differenceInDays, parseISO } from "date-fns";
 import type { Operator, Qualification, OperatorQualificationWithDetails } from "@shared/schema";
@@ -15,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, Plus, AlertTriangle, CheckCircle2, Clock, XCircle, Search, FileText, Pencil, Trash2, Shield, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
+import { Loader2, Plus, AlertTriangle, CheckCircle2, Clock, XCircle, Search, FileText, Pencil, Trash2, Shield, ShieldAlert, ShieldCheck, ShieldX, Upload, X } from "lucide-react";
 import { cn, formatOperatorFullName } from "@/lib/utils";
 
 type OQStatus = "active" | "expiring_soon" | "expired" | "missing";
@@ -56,6 +57,20 @@ function getDaysLabel(expirationDate: string | null) {
   return <span className="text-muted-foreground text-xs">{days}d remaining</span>;
 }
 
+type MatrixRow = {
+  operator: Operator;
+  quals: Array<{
+    qualification: Qualification;
+    oq: OperatorQualificationWithDetails | null;
+    status: OQStatus;
+  }>;
+  completionPct: number;
+};
+
+function isAssistantOperator(op: Operator): boolean {
+  return op.operatorType === "assistant" || op.isAssistantOnly;
+}
+
 export default function OQDashboard() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -70,9 +85,13 @@ export default function OQDashboard() {
     expirationDate: "",
     documentName: "",
     documentUrl: "",
+    documentObjectPath: "",
     notes: "",
     status: "active",
   });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { uploadFile, isUploading, progress } = useUpload();
 
   const { data: operators = [], isLoading: loadingOps } = useQuery<Operator[]>({
     queryKey: ["/api/operators"],
@@ -140,6 +159,7 @@ export default function OQDashboard() {
       expirationDate: "",
       documentName: "",
       documentUrl: "",
+      documentObjectPath: "",
       notes: "",
       status: "active",
     });
@@ -154,6 +174,7 @@ export default function OQDashboard() {
       expirationDate: oq.expirationDate || "",
       documentName: oq.documentName || "",
       documentUrl: oq.documentUrl || "",
+      documentObjectPath: oq.documentUrl || "",
       notes: oq.notes || "",
       status: oq.status,
     });
@@ -168,7 +189,7 @@ export default function OQDashboard() {
       issueDate: formData.issueDate || null,
       expirationDate: formData.expirationDate || null,
       documentName: formData.documentName || null,
-      documentUrl: formData.documentUrl || null,
+      documentUrl: formData.documentObjectPath || formData.documentUrl || null,
       notes: formData.notes || null,
       status: formData.status,
     };
@@ -177,6 +198,31 @@ export default function OQDashboard() {
     } else {
       createMutation.mutate(payload);
     }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const result = await uploadFile(file);
+    if (result) {
+      setFormData(f => ({
+        ...f,
+        documentUrl: result.objectPath,
+        documentObjectPath: result.objectPath,
+        documentName: f.documentName || result.metadata.name,
+      }));
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  function handleRemoveDocument() {
+    setFormData(f => ({
+      ...f,
+      documentUrl: "",
+      documentObjectPath: "",
+    }));
   }
 
   const activeOperators = operators.filter(op => op.isActive);
@@ -210,23 +256,15 @@ export default function OQDashboard() {
     return { active, expiringSoon, expired, missing: missingCount, total: oqsWithStatus.length };
   }, [oqsWithStatus, activeOperators, qualifications]);
 
-  const operatorMatrix = useMemo(() => {
-    const matrix: Array<{
-      operator: Operator;
-      quals: Array<{
-        qualification: Qualification;
-        oq: OperatorQualificationWithDetails | null;
-        status: OQStatus;
-      }>;
-      completionPct: number;
-    }> = [];
+  function buildMatrix(ops: Operator[]): MatrixRow[] {
+    const matrix: MatrixRow[] = [];
 
     const oqMap = new Map<string, OperatorQualificationWithDetails>();
     oqsWithStatus.forEach(oq => {
       oqMap.set(`${oq.operatorId}-${oq.qualificationId}`, oq);
     });
 
-    activeOperators.forEach(op => {
+    ops.forEach(op => {
       const quals = qualifications.map(q => {
         const oq = oqMap.get(`${op.id}-${q.id}`) || null;
         const status: OQStatus = oq ? getOQStatus(oq) : "missing";
@@ -240,7 +278,40 @@ export default function OQDashboard() {
     });
 
     return matrix;
+  }
+
+  const localOperatorMatrix = useMemo(() => {
+    const localOps = activeOperators
+      .filter(op => !op.isOutOfState)
+      .sort((a, b) => {
+        const aIsAssistant = isAssistantOperator(a) ? 1 : 0;
+        const bIsAssistant = isAssistantOperator(b) ? 1 : 0;
+        if (aIsAssistant !== bIsAssistant) return aIsAssistant - bIsAssistant;
+        return a.lastName.localeCompare(b.lastName);
+      });
+    return buildMatrix(localOps);
   }, [activeOperators, qualifications, oqsWithStatus]);
+
+  const oosOperatorMatrix = useMemo(() => {
+    const oosOps = activeOperators
+      .filter(op => op.isOutOfState)
+      .sort((a, b) => {
+        const groupCompare = a.groupName.localeCompare(b.groupName);
+        if (groupCompare !== 0) return groupCompare;
+        return a.lastName.localeCompare(b.lastName);
+      });
+    return buildMatrix(oosOps);
+  }, [activeOperators, qualifications, oqsWithStatus]);
+
+  const oosGroupNames = useMemo(() => {
+    const groups: string[] = [];
+    oosOperatorMatrix.forEach(row => {
+      if (!groups.includes(row.operator.groupName)) {
+        groups.push(row.operator.groupName);
+      }
+    });
+    return groups;
+  }, [oosOperatorMatrix]);
 
   const filteredOQs = useMemo(() => {
     let filtered = oqsWithStatus;
@@ -286,11 +357,148 @@ export default function OQDashboard() {
     );
   }
 
+  function renderMatrixRow(row: MatrixRow, idx: number) {
+    return (
+      <tr key={row.operator.id} className={cn("border-b", idx % 2 === 1 && "bg-muted/20")} data-testid={`row-operator-${row.operator.id}`}>
+        <td className={cn("p-3 sticky left-0", idx % 2 === 1 ? "bg-muted/20" : "bg-background")}>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-8 rounded-full shrink-0" style={{ backgroundColor: getOperatorColor(row.operator) }} />
+            <div className="min-w-0">
+              <div className="font-medium text-sm truncate">{formatOperatorFullName(row.operator)}</div>
+              <div className="text-xs text-muted-foreground truncate">{row.operator.groupName}</div>
+            </div>
+          </div>
+        </td>
+        <td className="p-3 text-center">
+          <div className="flex flex-col items-center gap-1">
+            <Progress value={row.completionPct} className="w-16 h-1.5" />
+            <span className="text-xs text-muted-foreground">{row.completionPct}%</span>
+          </div>
+        </td>
+        {row.quals.map(q => (
+          <td key={q.qualification.id} className="p-2 text-center" data-testid={`cell-oq-${row.operator.id}-${q.qualification.id}`}>
+            {q.status === "active" && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => q.oq && handleEdit(q.oq)}
+                className="bg-emerald-500/15"
+                title={q.oq?.expirationDate ? `Expires: ${format(parseISO(q.oq.expirationDate), "MM/dd/yyyy")}` : "Active (no expiry)"}
+                data-testid={`button-oq-active-${row.operator.id}-${q.qualification.id}`}
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              </Button>
+            )}
+            {q.status === "expiring_soon" && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => q.oq && handleEdit(q.oq)}
+                className="bg-amber-500/15"
+                title={q.oq?.expirationDate ? `Expires: ${format(parseISO(q.oq.expirationDate), "MM/dd/yyyy")}` : ""}
+                data-testid={`button-oq-expiring-${row.operator.id}-${q.qualification.id}`}
+              >
+                <Clock className="w-4 h-4 text-amber-600" />
+              </Button>
+            )}
+            {q.status === "expired" && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => q.oq && handleEdit(q.oq)}
+                className="bg-red-500/15"
+                title={q.oq?.expirationDate ? `Expired: ${format(parseISO(q.oq.expirationDate), "MM/dd/yyyy")}` : ""}
+                data-testid={`button-oq-expired-${row.operator.id}-${q.qualification.id}`}
+              >
+                <XCircle className="w-4 h-4 text-red-600" />
+              </Button>
+            )}
+            {q.status === "missing" && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  setEditingOQ(null);
+                  setFormData({
+                    ...formData,
+                    operatorId: String(row.operator.id),
+                    qualificationId: String(q.qualification.id),
+                    issueDate: "",
+                    expirationDate: "",
+                    documentName: "",
+                    documentUrl: "",
+                    documentObjectPath: "",
+                    notes: "",
+                    status: "active",
+                  });
+                  setDialogOpen(true);
+                }}
+                className="bg-muted/50"
+                title="Not on file - click to add"
+                data-testid={`button-oq-missing-${row.operator.id}-${q.qualification.id}`}
+              >
+                <span className="text-muted-foreground text-lg leading-none">-</span>
+              </Button>
+            )}
+          </td>
+        ))}
+      </tr>
+    );
+  }
+
+  function renderMatrixTable(matrixRows: MatrixRow[], showAssistantDivider: boolean) {
+    let assistantDividerInserted = false;
+    const rows: JSX.Element[] = [];
+    let rowIdx = 0;
+
+    matrixRows.forEach((row) => {
+      if (showAssistantDivider && !assistantDividerInserted && isAssistantOperator(row.operator)) {
+        assistantDividerInserted = true;
+        rows.push(
+          <tr key="assistant-divider" className="border-b bg-muted/20">
+            <td colSpan={qualifications.length + 2} className="px-3 py-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Assistants</span>
+            </td>
+          </tr>
+        );
+        rowIdx = 0;
+      }
+      rows.push(renderMatrixRow(row, rowIdx));
+      rowIdx++;
+    });
+
+    return rows;
+  }
+
+  function renderOOSMatrixTable() {
+    const rows: JSX.Element[] = [];
+
+    oosGroupNames.forEach(groupName => {
+      const groupRows = oosOperatorMatrix.filter(row => row.operator.groupName === groupName);
+      rows.push(
+        <tr key={`oos-group-${groupName}`} className="border-b bg-muted/20">
+          <td colSpan={qualifications.length + 2} className="px-3 py-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">{groupName}</span>
+          </td>
+        </tr>
+      );
+      groupRows.forEach((row, idx) => {
+        rows.push(renderMatrixRow(row, idx));
+      });
+    });
+
+    return rows;
+  }
+
+  const isImageUrl = (url: string) => {
+    return url && (url.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i) || url.startsWith("/objects/"));
+  };
+
   return (
     <div className="p-4 space-y-4 max-w-screen-2xl mx-auto" data-testid="oq-dashboard">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Operator Qualifications</h1>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">Qualifications</h1>
           <p className="text-sm text-muted-foreground">Track OQ status, expirations, and compliance for all operators</p>
         </div>
         <Button
@@ -361,9 +569,10 @@ export default function OQDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="matrix" className="space-y-3">
+      <Tabs defaultValue="local" className="space-y-3">
         <TabsList data-testid="tabs-oq-view">
-          <TabsTrigger value="matrix" data-testid="tab-matrix">Compliance Matrix</TabsTrigger>
+          <TabsTrigger value="local" data-testid="tab-local">Local</TabsTrigger>
+          <TabsTrigger value="oos" data-testid="tab-oos">Out of State</TabsTrigger>
           <TabsTrigger value="alerts" data-testid="tab-alerts">
             Alerts
             {urgentItems.length > 0 && (
@@ -375,7 +584,7 @@ export default function OQDashboard() {
           <TabsTrigger value="records" data-testid="tab-records">All Records</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="matrix" className="space-y-3">
+        <TabsContent value="local" className="space-y-3">
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -392,96 +601,47 @@ export default function OQDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {operatorMatrix.map((row, idx) => (
-                      <tr key={row.operator.id} className={cn("border-b", idx % 2 === 1 && "bg-muted/20")} data-testid={`row-operator-${row.operator.id}`}>
-                        <td className={cn("p-3 sticky left-0", idx % 2 === 1 ? "bg-muted/20" : "bg-background")}>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-8 rounded-full shrink-0" style={{ backgroundColor: getOperatorColor(row.operator) }} />
-                            <div className="min-w-0">
-                              <div className="font-medium text-sm truncate">{formatOperatorFullName(row.operator)}</div>
-                              <div className="text-xs text-muted-foreground truncate">{row.operator.groupName}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-3 text-center">
-                          <div className="flex flex-col items-center gap-1">
-                            <Progress value={row.completionPct} className="w-16 h-1.5" />
-                            <span className="text-xs text-muted-foreground">{row.completionPct}%</span>
-                          </div>
-                        </td>
-                        {row.quals.map(q => (
-                          <td key={q.qualification.id} className="p-2 text-center" data-testid={`cell-oq-${row.operator.id}-${q.qualification.id}`}>
-                            {q.status === "active" && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => q.oq && handleEdit(q.oq)}
-                                className="bg-emerald-500/15"
-                                title={q.oq?.expirationDate ? `Expires: ${format(parseISO(q.oq.expirationDate), "MM/dd/yyyy")}` : "Active (no expiry)"}
-                                data-testid={`button-oq-active-${row.operator.id}-${q.qualification.id}`}
-                              >
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                              </Button>
-                            )}
-                            {q.status === "expiring_soon" && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => q.oq && handleEdit(q.oq)}
-                                className="bg-amber-500/15"
-                                title={q.oq?.expirationDate ? `Expires: ${format(parseISO(q.oq.expirationDate), "MM/dd/yyyy")}` : ""}
-                                data-testid={`button-oq-expiring-${row.operator.id}-${q.qualification.id}`}
-                              >
-                                <Clock className="w-4 h-4 text-amber-600" />
-                              </Button>
-                            )}
-                            {q.status === "expired" && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => q.oq && handleEdit(q.oq)}
-                                className="bg-red-500/15"
-                                title={q.oq?.expirationDate ? `Expired: ${format(parseISO(q.oq.expirationDate), "MM/dd/yyyy")}` : ""}
-                                data-testid={`button-oq-expired-${row.operator.id}-${q.qualification.id}`}
-                              >
-                                <XCircle className="w-4 h-4 text-red-600" />
-                              </Button>
-                            )}
-                            {q.status === "missing" && (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => {
-                                  setEditingOQ(null);
-                                  setFormData({
-                                    ...formData,
-                                    operatorId: String(row.operator.id),
-                                    qualificationId: String(q.qualification.id),
-                                    issueDate: "",
-                                    expirationDate: "",
-                                    documentName: "",
-                                    documentUrl: "",
-                                    notes: "",
-                                    status: "active",
-                                  });
-                                  setDialogOpen(true);
-                                }}
-                                className="bg-muted/50"
-                                title="Not on file - click to add"
-                                data-testid={`button-oq-missing-${row.operator.id}-${q.qualification.id}`}
-                              >
-                                <span className="text-muted-foreground text-lg leading-none">-</span>
-                              </Button>
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
+                    {renderMatrixTable(localOperatorMatrix, true)}
                   </tbody>
                 </table>
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="oos" className="space-y-3">
+          {oosOperatorMatrix.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-lg font-medium">No Out of State Operators</p>
+                <p className="text-sm text-muted-foreground">There are no active out-of-state operators to display</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/30">
+                        <th className="text-left p-3 font-medium text-muted-foreground sticky left-0 bg-muted/30 min-w-[180px]">Operator</th>
+                        <th className="text-center p-3 font-medium text-muted-foreground min-w-[80px]">Status</th>
+                        {qualifications.map(q => (
+                          <th key={q.id} className="text-center p-2 font-medium text-muted-foreground min-w-[90px]">
+                            <span className="text-xs">{q.name}</span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {renderOOSMatrixTable()}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="alerts" className="space-y-3">
@@ -742,14 +902,65 @@ export default function OQDashboard() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="oq-document-url">Document URL</Label>
-              <Input
-                id="oq-document-url"
-                placeholder="Link to document or file"
-                value={formData.documentUrl}
-                onChange={e => setFormData(f => ({ ...f, documentUrl: e.target.value }))}
-                data-testid="input-oq-document-url"
+              <Label>Document Scan</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleFileUpload}
+                className="hidden"
+                data-testid="input-oq-document-file"
               />
+              {formData.documentUrl && isImageUrl(formData.documentUrl) && (
+                <div className="relative w-full h-32 rounded-md overflow-hidden bg-muted mb-2">
+                  <img
+                    src={formData.documentUrl}
+                    alt="Document preview"
+                    className="w-full h-full object-contain"
+                    data-testid="img-oq-document-preview"
+                  />
+                </div>
+              )}
+              {formData.documentUrl && !isImageUrl(formData.documentUrl) && (
+                <div className="flex items-center gap-2 p-2 rounded-md bg-muted mb-2" data-testid="link-oq-document">
+                  <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <a href={formData.documentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary truncate">
+                    {formData.documentName || formData.documentUrl}
+                  </a>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  data-testid="button-upload-document"
+                >
+                  {isUploading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  {isUploading ? "Uploading..." : "Choose File"}
+                </Button>
+                {formData.documentUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveDocument}
+                    data-testid="button-remove-document"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+              {isUploading && (
+                <Progress value={progress} className="w-full h-1.5 mt-2" data-testid="progress-upload" />
+              )}
             </div>
 
             <div className="space-y-2">
