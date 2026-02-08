@@ -288,26 +288,22 @@ function AvailabilityChart({
                 className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
                 style={{
                   width: `${Math.max(clampedPct, 4)}%`,
-                  background: day.overbooked
+                  background: day.overbooked || pct >= 90
                     ? "hsl(0 72% 51%)"
-                    : pct >= 100
+                    : pct >= 70
                       ? "hsl(38 92% 50%)"
-                      : pct >= 70
-                        ? "hsl(142 71% 45%)"
-                        : "hsl(142 71% 45% / 0.7)",
+                      : "hsl(142 71% 45%)",
                 }}
                 data-testid={`bar-${day.iso}`}
               />
             </div>
             <span className={cn(
               "text-xs font-bold tabular-nums shrink-0 leading-none",
-              day.overbooked
-                ? "text-destructive"
-                : day.available === 0
+              day.overbooked || pct >= 90
+                ? "text-red-600 dark:text-red-400"
+                : pct >= 70
                   ? "text-amber-600 dark:text-amber-400"
-                  : day.available <= 2
-                    ? "text-amber-600 dark:text-amber-400"
-                    : "text-green-600 dark:text-green-400"
+                  : "text-green-600 dark:text-green-400"
             )}>
               {day.overbooked ? (
                 <>{day.overbookedCount} over</>
