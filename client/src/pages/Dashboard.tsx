@@ -270,9 +270,10 @@ function AvailabilityChart({
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Trucks</span>
       </div>
       {dayStats.map((day) => {
-        const pct = day.effectiveTrucks > 0 ? (day.booked / day.effectiveTrucks) * 100 : 0;
-        const clampedPct = Math.min(pct, 100);
+        const availPct = day.effectiveTrucks > 0 ? (day.available / day.effectiveTrucks) * 100 : 0;
+        const clampedPct = day.overbooked ? 100 : Math.min(availPct, 100);
         const isToday = day.iso === todayIso;
+        const bookedPct = day.effectiveTrucks > 0 ? (day.booked / day.effectiveTrucks) * 100 : 0;
 
         return (
           <div
@@ -288,20 +289,22 @@ function AvailabilityChart({
                 className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
                 style={{
                   width: `${Math.max(clampedPct, 4)}%`,
-                  background: day.overbooked || pct >= 90
+                  background: day.overbooked
                     ? "hsl(0 72% 51%)"
-                    : pct >= 70
+                    : bookedPct >= 90
                       ? "hsl(38 92% 50%)"
-                      : "hsl(142 71% 45%)",
+                      : bookedPct >= 70
+                        ? "hsl(38 92% 50%)"
+                        : "hsl(142 71% 45%)",
                 }}
                 data-testid={`bar-${day.iso}`}
               />
             </div>
             <span className={cn(
               "text-xs font-bold tabular-nums shrink-0 leading-none",
-              day.overbooked || pct >= 90
+              day.overbooked
                 ? "text-red-600 dark:text-red-400"
-                : pct >= 70
+                : bookedPct >= 70
                   ? "text-amber-600 dark:text-amber-400"
                   : "text-green-600 dark:text-green-400"
             )}>
