@@ -40,7 +40,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return (
     <>
       <Navigation />
-      <main className="bg-background min-h-[calc(100vh-65px)]">
+      <main className="bg-background min-h-[calc(100vh-3.5rem)]">
         <Component />
       </main>
     </>

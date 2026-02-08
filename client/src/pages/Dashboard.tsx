@@ -732,7 +732,7 @@ function DesktopDashboard() {
   });
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col bg-muted/30">
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-muted/30">
       <div className="px-6 py-3 flex items-center justify-between gap-4 border-b bg-card">
         <div className="flex items-center gap-4 flex-wrap">
           <h1 className="text-2xl font-display font-bold text-foreground">

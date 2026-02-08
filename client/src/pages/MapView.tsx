@@ -282,7 +282,7 @@ export default function MapView() {
   }, [filteredJobs]);
 
   return (
-    <div className="h-[calc(100vh-65px)] flex flex-col">
+    <div className="h-[calc(100vh-3.5rem)] flex flex-col">
       <div className="border-b bg-card p-3">
         <div className="max-w-screen-2xl mx-auto flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">

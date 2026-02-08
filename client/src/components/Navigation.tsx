@@ -35,76 +35,73 @@ export function Navigation() {
   if (!user) return null;
 
   return (
-    <nav className="border-b bg-card shadow-sm sticky top-0 z-50">
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 justify-between items-center">
-          <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
-              <img src={badgerLogo} alt="Badger" className="h-8 hidden sm:block" data-testid="img-badger-logo" />
-              <img src={badgerLogo} alt="Badger" className="h-6 sm:hidden" data-testid="img-badger-logo-mobile" />
+    <nav className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50" data-testid="navigation-bar">
+      <div className="flex h-14 items-center px-4 gap-6">
+        <Link href="/" className="flex items-center shrink-0">
+          <img src={badgerLogo} alt="Badger" className="h-10 hidden sm:block" data-testid="img-badger-logo" />
+          <img src={badgerLogo} alt="Badger" className="h-8 sm:hidden" data-testid="img-badger-logo-mobile" />
+        </Link>
+
+        <div className="hidden md:flex items-center gap-0.5">
+          {navItems.map((item) => (
+            <Link key={item.href} href={item.href}>
+              <div className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
+                location === item.href 
+                  ? "bg-primary/10 text-primary" 
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )} data-testid={`nav-link-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </div>
             </Link>
+          ))}
+        </div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-1">
-              {navItems.map((item) => (
-                <Link key={item.href} href={item.href}>
-                  <div className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer",
-                    location === item.href 
-                      ? "bg-primary/10 text-primary" 
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}>
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </div>
-                </Link>
-              ))}
-            </div>
+        <div className="flex-1" />
+
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 text-sm">
+            <span className="font-medium text-foreground" data-testid="text-user-name">
+              {user.firstName && user.lastName 
+                ? `${user.firstName} ${user.lastName}` 
+                : user.username || user.email || "User"}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground capitalize">{user.role}</span>
           </div>
+          
+          <Button variant="ghost" size="icon" onClick={() => logout()} title="Sign Out" data-testid="button-logout">
+            <LogOut className="h-4 w-4 text-muted-foreground" />
+          </Button>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex flex-col items-end mr-2">
-              <span className="text-sm font-medium" data-testid="text-user-name">
-                {user.firstName && user.lastName 
-                  ? `${user.firstName} ${user.lastName}` 
-                  : user.username || user.email || "User"}
-              </span>
-              <span className="text-xs text-muted-foreground capitalize">{user.role}</span>
-            </div>
-            
-            <Button variant="ghost" size="icon" onClick={() => logout()} title="Logout">
-              <LogOut className="h-5 w-5 text-muted-foreground hover:text-destructive transition-colors" />
-            </Button>
-
-            {/* Mobile Menu */}
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent>
-                <SheetHeader>
-                  <SheetTitle>Menu</SheetTitle>
-                </SheetHeader>
-                <div className="flex flex-col space-y-2 mt-6">
-                  {navItems.map((item) => (
-                    <Link key={item.href} href={item.href}>
-                      <div className={cn(
-                        "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer",
-                        location === item.href 
-                          ? "bg-primary/10 text-primary" 
-                          : "text-muted-foreground hover:bg-muted"
-                      )}>
-                        <item.icon className="h-5 w-5" />
-                        {item.label}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-mobile-menu">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Menu</SheetTitle>
+              </SheetHeader>
+              <div className="flex flex-col space-y-1 mt-6">
+                {navItems.map((item) => (
+                  <Link key={item.href} href={item.href}>
+                    <div className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer",
+                      location === item.href 
+                        ? "bg-primary/10 text-primary" 
+                        : "text-muted-foreground hover:bg-muted"
+                    )}>
+                      <item.icon className="h-5 w-5" />
+                      {item.label}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </nav>

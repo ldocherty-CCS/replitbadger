@@ -368,7 +368,7 @@ export function MobileCalendarView() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col h-[calc(100vh-4rem)] bg-background" data-testid="mobile-calendar-view">
+      <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background" data-testid="mobile-calendar-view">
         <div className="flex items-center justify-between px-2 py-1 border-b bg-card shrink-0">
           <Button variant="ghost" size="icon" onClick={prevWeek} data-testid="mobile-prev-week">
             <ChevronLeft className="w-4 h-4" />
