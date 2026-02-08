@@ -67,7 +67,7 @@ function MobileDraggableJob({ job, isAssistantEntry }: { job: Job & { customer?:
       {...listeners}
       {...attributes}
       className={cn(
-        "rounded-[2px] px-1 py-0.5 leading-none overflow-hidden flex items-center touch-none w-full",
+        "rounded px-1 py-0.5 leading-none overflow-hidden flex items-center touch-none w-full",
         isDragging && "opacity-40",
         isAssistantEntry && "opacity-75"
       )}
@@ -78,7 +78,7 @@ function MobileDraggableJob({ job, isAssistantEntry }: { job: Job & { customer?:
       }}
       data-testid={`mobile-job-${job.id}${isAssistantEntry ? '-assist' : ''}`}
     >
-      <span className="text-[8px] font-bold block truncate w-full text-center">
+      <span className="text-[9px] font-bold block truncate w-full text-center">
         {isAssistantEntry ? `A: ${truncName}` : truncName}
       </span>
     </div>
@@ -117,7 +117,7 @@ function MobileDropCell({
       ref={setNodeRef}
       onClick={handleClick}
       className={cn(
-        "min-h-[22px] border-r last:border-r-0 px-px py-px flex flex-col gap-px transition-colors",
+        "min-h-[28px] border-r last:border-r-0 px-px py-0.5 flex flex-col gap-0.5 transition-colors",
         isOff && "bg-red-100/60 dark:bg-red-950/30",
         isOver && "bg-primary/10 ring-1 ring-inset ring-primary/30",
         isEmpty && !isOff && "cursor-pointer"
@@ -153,7 +153,7 @@ export function MobileCalendarView() {
   const [holdOpen, setHoldOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{ operatorId: number; date: string } | null>(null);
 
-  const startDate = startOfWeek(currentDate, { weekStartsOn: 0 });
+  const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(startDate, i);
     return {
@@ -466,6 +466,7 @@ export function MobileCalendarView() {
                   const isAssistant = operator.operatorType === "assistant";
                   const prevOp = idx > 0 ? group.operators[idx - 1] : null;
                   const showAssistantDivider = isAssistant && prevOp && prevOp.operatorType !== "assistant";
+                  const isEvenRow = idx % 2 === 0;
                   return (
                   <div key={operator.id}>
                     {showAssistantDivider && (
@@ -474,12 +475,21 @@ export function MobileCalendarView() {
                       </div>
                     )}
                   <div
-                    className="grid border-b last:border-b-0"
-                    style={{ gridTemplateColumns: "minmax(52px, 56px) repeat(7, 1fr)" }}
+                    className={cn(
+                      "grid border-b",
+                      isEvenRow ? "bg-card" : "bg-muted/20"
+                    )}
+                    style={{ gridTemplateColumns: "minmax(56px, 64px) repeat(7, 1fr)", borderBottomWidth: "2px" }}
                     data-testid={`mobile-row-${operator.id}`}
                   >
-                    <div className="px-1 py-px flex items-center border-r bg-muted/30 sticky left-0 z-10">
-                      <span className="text-[9px] font-semibold leading-tight truncate">
+                    <div
+                      className="px-1.5 py-1 flex items-center border-r-2 sticky left-0 z-10"
+                      style={{
+                        backgroundColor: isEvenRow ? "hsl(var(--card))" : "hsl(var(--muted) / 0.3)",
+                        borderRightColor: operator.color || "hsl(var(--border))",
+                      }}
+                    >
+                      <span className="text-[10px] font-bold leading-tight truncate">
                         {formatOperatorShortName(operator)}
                       </span>
                     </div>
