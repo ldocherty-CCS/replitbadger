@@ -7,7 +7,6 @@ import {
   Truck, 
   LogOut, 
   Menu,
-  LayoutDashboard,
   MapPin,
   ShieldCheck
 } from "lucide-react";
@@ -26,8 +25,7 @@ export function Navigation() {
   const { user, logout } = useAuth();
 
   const navItems = [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/schedule", label: "Schedule Board", icon: CalendarDays },
+    { href: "/", label: "Schedule", icon: CalendarDays },
     { href: "/operators", label: "Operators", icon: Truck },
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/oq", label: "OQ Tracker", icon: ShieldCheck },
