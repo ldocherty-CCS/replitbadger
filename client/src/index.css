@@ -104,3 +104,11 @@
 .custom-scrollbar::-webkit-scrollbar-thumb {
   @apply bg-muted-foreground/30 rounded-full hover:bg-muted-foreground/50 transition-colors;
 }
+
+@keyframes needs-attention {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.animate-needs-attention {
+  animation: needs-attention 1.8s ease-in-out infinite;
+}

@@ -88,6 +88,7 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
   const statusColorClass = isAssistantEntry
     ? "bg-[hsl(30,90%,50%)] border-[hsl(30,90%,50%)] text-white"
     : statusColors[job.status] || "bg-gray-400 border-gray-400 text-white";
+  const needsAssistantAttention = !isAssistantEntry && job.additionalOperatorNeeded && !job.assistantOperator;
   const hasContextMenu = !isOverlay && !isAssistantEntry && (onDuplicate || onDelete || onStatusChange || onCancel || onRestore);
 
   const missingQuals = (() => {
@@ -101,7 +102,8 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
     <Card className={cn(
       "overflow-hidden shadow-sm hover:shadow-md transition-shadow",
       statusColorClass,
-      isAssistantEntry && "opacity-80 border-dashed border-2"
+      isAssistantEntry && "opacity-80 border-dashed border-2",
+      needsAssistantAttention && "animate-needs-attention"
     )}>
       <CardContent className="p-1.5 space-y-0.5">
         {isAssistantEntry && (
