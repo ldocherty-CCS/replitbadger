@@ -617,7 +617,7 @@ export function CreateJobDialog({
                       <SelectContent>
                         <SelectItem value="undefined">Unassigned</SelectItem>
                         {operators
-                          ?.filter((op) => !(op as any).isAssistantOnly)
+                          ?.filter((op) => !(op as any).isAssistantOnly && (op as any).operatorType !== "assistant")
                           .map((op) => (
                           <SelectItem key={op.id} value={op.id.toString()}>
                             {op.name}

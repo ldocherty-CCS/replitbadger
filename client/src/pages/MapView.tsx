@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useJobs } from "@/hooks/use-jobs";
-import { useOperators } from "@/hooks/use-operators";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,10 +14,9 @@ import {
 } from "@/components/ui/select";
 import { Loader2, MapPin, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { format, addDays, startOfWeek, parseISO, addWeeks } from "date-fns";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useGoogleMapsReady } from "@/components/AddressAutocomplete";
 
 function escapeHtml(str: string): string {
   const div = document.createElement("div");
@@ -52,47 +50,20 @@ const DAY_COLORS: Record<number, string> = {
 
 const DEFAULT_CENTER: [number, number] = [43.0389, -87.9065];
 
-function createDayMarkerIcon(statusColor: string, dayAbbrev: string, dayColor: string) {
-  return L.divIcon({
-    className: "custom-marker",
-    html: `<div style="position: relative; width: 32px; height: 32px;">
-      <div style="
-        width: 32px; height: 32px; 
-        background: ${statusColor}; 
-        border: 3px solid white; 
-        border-radius: 50%; 
-        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-      "></div>
-      <div style="
-        position: absolute; top: -10px; right: -10px;
-        background: ${dayColor}; color: white;
-        font-size: 9px; font-weight: 700;
-        padding: 1px 4px; border-radius: 6px;
-        line-height: 14px; white-space: nowrap;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        border: 1px solid white;
-      ">${dayAbbrev}</div>
-    </div>`,
-    iconSize: [42, 42],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
-  });
+function createJobMarkerSvg(color: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28">
+    <circle cx="14" cy="14" r="12" fill="${color}" stroke="white" stroke-width="3"/>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-function createSimpleMarkerIcon(color: string) {
-  return L.divIcon({
-    className: "custom-marker",
-    html: `<div style="
-      width: 28px; height: 28px; 
-      background: ${color}; 
-      border: 3px solid white; 
-      border-radius: 50%; 
-      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-    "></div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14],
-  });
+function createDayBadgeMarkerSvg(statusColor: string, dayAbbrev: string, dayColor: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42">
+    <circle cx="16" cy="22" r="14" fill="${statusColor}" stroke="white" stroke-width="3"/>
+    <rect x="20" y="2" width="${dayAbbrev.length > 2 ? 22 : 20}" height="16" rx="6" fill="${dayColor}" stroke="white" stroke-width="1"/>
+    <text x="${20 + (dayAbbrev.length > 2 ? 11 : 10)}" y="14" text-anchor="middle" fill="white" font-size="9" font-weight="700" font-family="system-ui, sans-serif">${dayAbbrev}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 export default function MapView() {
@@ -107,8 +78,10 @@ export default function MapView() {
   const { toast } = useToast();
 
   const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<L.Map | null>(null);
-  const markersLayer = useRef<L.LayerGroup | null>(null);
+  const googleMap = useRef<google.maps.Map | null>(null);
+  const googleMarkers = useRef<google.maps.Marker[]>([]);
+  const googleInfoWindow = useRef<google.maps.InfoWindow | null>(null);
+  const mapsReady = useGoogleMapsReady();
 
   const queryFilters = useMemo(() => {
     return { startDate: rangeStart, endDate: rangeEnd };
@@ -148,35 +121,35 @@ export default function MapView() {
   }, [jobs]);
 
   useEffect(() => {
-    if (!mapRef.current || leafletMap.current) return;
-
-    leafletMap.current = L.map(mapRef.current, {
-      center: DEFAULT_CENTER,
+    if (!mapsReady || !mapRef.current) return;
+    if (googleMap.current) {
+      const mapDiv = googleMap.current.getDiv();
+      if (mapDiv && mapDiv.parentElement) return;
+    }
+    googleMap.current = new google.maps.Map(mapRef.current, {
+      center: { lat: DEFAULT_CENTER[0], lng: DEFAULT_CENTER[1] },
       zoom: 10,
+      gestureHandling: "greedy",
       zoomControl: true,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
     });
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(leafletMap.current);
-
-    markersLayer.current = L.layerGroup().addTo(leafletMap.current);
-
+    googleInfoWindow.current = new google.maps.InfoWindow();
     return () => {
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
-      }
+      googleMarkers.current.forEach((m) => m.setMap(null));
+      googleMarkers.current = [];
+      googleMap.current = null;
     };
-  }, []);
+  }, [mapsReady]);
 
   const isMultiDay = rangeStart !== rangeEnd;
 
   useEffect(() => {
-    if (!leafletMap.current || !markersLayer.current) return;
+    if (!googleMap.current) return;
 
-    markersLayer.current.clearLayers();
+    googleMarkers.current.forEach((m) => m.setMap(null));
+    googleMarkers.current = [];
 
     const jobsWithLocation = filteredJobs.filter(
       (j: any) => j.lat != null && j.lng != null
@@ -184,12 +157,14 @@ export default function MapView() {
 
     if (jobsWithLocation.length === 0) return;
 
-    const bounds = L.latLngBounds([]);
+    const bounds = new google.maps.LatLngBounds();
+    let hasPoints = false;
 
     jobsWithLocation.forEach((job: any) => {
       const lat = job.lat!;
       const lng = job.lng!;
-      bounds.extend([lat, lng]);
+      bounds.extend({ lat, lng });
+      hasPoints = true;
 
       const statusColor = STATUS_COLORS[job.status]?.hex || "#9ca3af";
       const jobDate = parseISO(job.scheduledDate);
@@ -197,9 +172,27 @@ export default function MapView() {
       const dayAbbrev = DAY_ABBREVS[dayOfWeek];
       const dayColor = DAY_COLORS[dayOfWeek] || "#9ca3af";
 
-      const icon = isMultiDay
-        ? createDayMarkerIcon(statusColor, dayAbbrev, dayColor)
-        : createSimpleMarkerIcon(statusColor);
+      const iconUrl = isMultiDay
+        ? createDayBadgeMarkerSvg(statusColor, dayAbbrev, dayColor)
+        : createJobMarkerSvg(statusColor);
+
+      const iconSize = isMultiDay
+        ? new google.maps.Size(42, 42)
+        : new google.maps.Size(28, 28);
+
+      const anchor = isMultiDay
+        ? new google.maps.Point(16, 22)
+        : new google.maps.Point(14, 14);
+
+      const marker = new google.maps.Marker({
+        position: { lat, lng },
+        map: googleMap.current!,
+        icon: {
+          url: iconUrl,
+          scaledSize: iconSize,
+          anchor: anchor,
+        },
+      });
 
       const operatorName = escapeHtml(job.operator?.name || "Unassigned");
       const customerName = escapeHtml(job.customer?.name || "Unknown");
@@ -210,7 +203,7 @@ export default function MapView() {
       const dateLabel = format(jobDate, "EEE, MMM d");
       const seriesLabel = job.seriesId ? `<div style="font-size: 11px; color: #888; margin-top: 4px;">Series job</div>` : "";
 
-      const popup = L.popup().setContent(`
+      const contentString = `
         <div style="min-width: 220px; font-family: system-ui, sans-serif;">
           <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
             <span style="
@@ -233,15 +226,20 @@ export default function MapView() {
           <div style="font-size: 12px; margin-top: 4px; color: #888;">${addressText}</div>
           ${seriesLabel}
         </div>
-      `);
+      `;
 
-      L.marker([lat, lng], { icon }).addTo(markersLayer.current!).bindPopup(popup);
+      marker.addListener("click", () => {
+        googleInfoWindow.current?.setContent(contentString);
+        googleInfoWindow.current?.open(googleMap.current!, marker);
+      });
+
+      googleMarkers.current.push(marker);
     });
 
-    if (bounds.isValid()) {
-      leafletMap.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    if (hasPoints) {
+      googleMap.current.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });
     }
-  }, [filteredJobs, isMultiDay]);
+  }, [filteredJobs, isMultiDay, mapsReady]);
 
   const navigateWeek = (direction: number) => {
     const start = parseISO(rangeStart);

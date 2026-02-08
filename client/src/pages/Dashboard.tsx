@@ -490,8 +490,8 @@ function DesktopDashboard() {
     }
 
     const targetOp = operators?.find((o: any) => o.id === operatorId);
-    if (targetOp && (targetOp as any).isAssistantOnly) {
-      toast({ title: "Cannot Assign", description: `${targetOp.name} is an assistant-only operator. Assign them as an assistant on a job instead.`, variant: "destructive" });
+    if (targetOp && ((targetOp as any).isAssistantOnly || (targetOp as any).operatorType === "assistant")) {
+      toast({ title: "Cannot Assign", description: `${targetOp.name} is an assistant operator. Assign them as an assistant on a job instead.`, variant: "destructive" });
       return;
     }
 
