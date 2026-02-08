@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useJobs, useUpdateJob, useDeleteJob, useDuplicateJob } from "@/hooks/use-jobs";
+import { queryClient } from "@/lib/queryClient";
 import { useOperators } from "@/hooks/use-operators";
 import { JobCard, wasContextAction } from "@/components/JobCard";
 import { CreateJobDialog } from "@/components/CreateJobDialog";
@@ -362,7 +363,7 @@ function DesktopDashboard() {
 
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMap = useRef<google.maps.Map | null>(null);
-  const googleMarkers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const googleMarkers = useRef<google.maps.Marker[]>([]);
   const googleInfoWindow = useRef<google.maps.InfoWindow | null>(null);
   const mapsReady = useGoogleMapsReady();
 
@@ -507,7 +508,7 @@ function DesktopDashboard() {
   const removeTimeOffDay = useRemoveTimeOffDay();
   const deleteTimeOff = useDeleteTimeOff();
 
-  const handleRemoveOff = useCallback((operatorId: number, date: string) => {
+  const handleRemoveOff = useCallback(async (operatorId: number, date: string) => {
     const record = timeOffRecords?.find((r) => {
       const start = r.startDate;
       const end = r.endDate;
@@ -522,10 +523,44 @@ function DesktopDashboard() {
     } else {
       const op = operators?.find((o) => o.id === operatorId);
       if (op?.isOutOfState) {
-        toast({ title: "Out-of-State Operator", description: "Edit the operator's availability dates to change their schedule.", variant: "destructive" });
+        const updates: Record<string, string> = {};
+        if (op.availableFrom && date < op.availableFrom) {
+          updates.availableFrom = date;
+        }
+        if (op.availableTo && date > op.availableTo) {
+          updates.availableTo = date;
+        }
+        if (!op.availableFrom && op.availableTo && date > op.availableTo) {
+          updates.availableTo = date;
+        }
+        if (op.availableFrom && !op.availableTo && date < op.availableFrom) {
+          updates.availableFrom = date;
+        }
+        if (!op.availableFrom && !op.availableTo) {
+          updates.availableFrom = date;
+          updates.availableTo = date;
+        }
+        if (Object.keys(updates).length > 0) {
+          try {
+            const res = await fetch(`/api/operators/${operatorId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updates),
+              credentials: "include",
+            });
+            if (res.ok) {
+              queryClient.invalidateQueries({ queryKey: ["/api/operators"] });
+              toast({ title: "Availability Updated", description: `Operator is now available on ${date}` });
+            } else {
+              toast({ title: "Error", description: "Failed to update availability", variant: "destructive" });
+            }
+          } catch {
+            toast({ title: "Error", description: "Failed to update availability", variant: "destructive" });
+          }
+        }
       }
     }
-  }, [timeOffRecords, operators, deleteTimeOff, removeTimeOffDay, toast]);
+  }, [timeOffRecords, operators, deleteTimeOff, removeTimeOffDay, toast, queryClient]);
 
   const toggleGroup = useCallback((groupName: string) => {
     setCollapsedGroups(prev => {
@@ -571,7 +606,6 @@ function DesktopDashboard() {
     googleMap.current = new google.maps.Map(mapRef.current, {
       center: { lat: DEFAULT_CENTER[0], lng: DEFAULT_CENTER[1] },
       zoom: 10,
-      mapId: "badger-dispatch-map",
       gestureHandling: "greedy",
       disableDefaultUI: false,
       zoomControl: true,
@@ -587,7 +621,7 @@ function DesktopDashboard() {
 
   useEffect(() => {
     if (!mapVisible && googleMap.current) {
-      googleMarkers.current.forEach(m => m.map = null);
+      googleMarkers.current.forEach(m => m.setMap(null));
       googleMarkers.current = [];
       googleMap.current = null;
     }
@@ -602,9 +636,9 @@ function DesktopDashboard() {
   const mapTruckMarkers = operators?.filter((op: any) => op.truckLat != null && op.truckLng != null).length || 0;
 
   useEffect(() => {
-    if (!googleMap.current || !google.maps.marker?.AdvancedMarkerElement) return;
+    if (!googleMap.current) return;
 
-    googleMarkers.current.forEach(m => m.map = null);
+    googleMarkers.current.forEach(m => m.setMap(null));
     googleMarkers.current = [];
 
     const bounds = new google.maps.LatLngBounds();
@@ -634,17 +668,14 @@ function DesktopDashboard() {
           bounds.extend({ lat: markerLat, lng: markerLng });
           hasPoints = true;
 
-          const iconImg = document.createElement("img");
-          iconImg.src = createTruckMarkerSvg(getOperatorColor(op));
-          iconImg.width = 28;
-          iconImg.height = 28;
-          iconImg.style.cursor = "pointer";
-
-          const marker = new google.maps.marker.AdvancedMarkerElement({
+          const marker = new google.maps.Marker({
             map: googleMap.current!,
             position: { lat: markerLat, lng: markerLng },
-            content: iconImg,
             title: op.name,
+            icon: {
+              url: createTruckMarkerSvg(getOperatorColor(op)),
+              scaledSize: new google.maps.Size(28, 28),
+            },
           });
 
           const outOfStateBadge = op.isOutOfState
@@ -660,9 +691,9 @@ function DesktopDashboard() {
             </div>
           `;
 
-          marker.addListener("gmp-click", () => {
+          marker.addListener("click", () => {
             googleInfoWindow.current?.setContent(infoContent);
-            googleInfoWindow.current?.open({ anchor: marker, map: googleMap.current! });
+            googleInfoWindow.current?.open(googleMap.current!, marker);
           });
 
           googleMarkers.current.push(marker);
@@ -678,17 +709,15 @@ function DesktopDashboard() {
       hasPoints = true;
 
       const markerColor = STATUS_COLORS[job.status]?.hex || "#9ca3af";
-      const iconImg = document.createElement("img");
-      iconImg.src = createJobMarkerSvg(markerColor);
-      iconImg.width = 24;
-      iconImg.height = 24;
-      iconImg.style.cursor = "pointer";
 
-      const marker = new google.maps.marker.AdvancedMarkerElement({
+      const marker = new google.maps.Marker({
         map: googleMap.current!,
         position: { lat, lng },
-        content: iconImg,
         title: job.customer?.name || "Job",
+        icon: {
+          url: createJobMarkerSvg(markerColor),
+          scaledSize: new google.maps.Size(24, 24),
+        },
       });
 
       const operatorName = escapeHtml(job.operator?.name || "Unassigned");
@@ -722,9 +751,9 @@ function DesktopDashboard() {
         </div>
       `;
 
-      marker.addListener("gmp-click", () => {
+      marker.addListener("click", () => {
         googleInfoWindow.current?.setContent(infoContent);
-        googleInfoWindow.current?.open({ anchor: marker, map: googleMap.current! });
+        googleInfoWindow.current?.open(googleMap.current!, marker);
 
         if (hasTruckLoc) {
           setTimeout(() => {
