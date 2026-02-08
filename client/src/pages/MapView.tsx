@@ -283,32 +283,36 @@ export default function MapView() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
-      <div className="border-b bg-card p-3">
-        <div className="max-w-screen-2xl mx-auto flex flex-wrap items-center gap-4">
+      <div className="border-b bg-card px-6 py-4">
+        <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center gap-2">
             <MapPin className="h-5 w-5 text-primary" />
             <h1 className="text-lg font-bold" data-testid="text-map-title">Job Map</h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="h-6 w-px bg-border hidden sm:block" />
+
+          <div className="flex items-center gap-3">
             <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)} data-testid="button-prev-week">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Input
-              type="date"
-              value={rangeStart}
-              onChange={(e) => setRangeStart(e.target.value)}
-              className="w-40"
-              data-testid="input-range-start"
-            />
-            <Label className="text-sm text-muted-foreground">to</Label>
-            <Input
-              type="date"
-              value={rangeEnd}
-              onChange={(e) => setRangeEnd(e.target.value)}
-              className="w-40"
-              data-testid="input-range-end"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={rangeStart}
+                onChange={(e) => setRangeStart(e.target.value)}
+                className="w-40"
+                data-testid="input-range-start"
+              />
+              <Label className="text-sm text-muted-foreground">to</Label>
+              <Input
+                type="date"
+                value={rangeEnd}
+                onChange={(e) => setRangeEnd(e.target.value)}
+                className="w-40"
+                data-testid="input-range-end"
+              />
+            </div>
             <Button variant="outline" size="icon" onClick={() => navigateWeek(1)} data-testid="button-next-week">
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -324,7 +328,9 @@ export default function MapView() {
             </Button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="h-6 w-px bg-border hidden sm:block" />
+
+          <div className="flex items-center gap-2.5">
             <Checkbox
               id="hide-dispatched"
               checked={hideDispatched}
@@ -337,31 +343,37 @@ export default function MapView() {
           </div>
 
           {seriesOptions.length > 0 && (
-            <Select value={seriesFilter} onValueChange={setSeriesFilter}>
-              <SelectTrigger className="w-56" data-testid="select-series-filter">
-                <SelectValue placeholder="Filter by series" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Jobs</SelectItem>
-                {seriesOptions.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.label} ({s.count})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <>
+              <div className="h-6 w-px bg-border hidden sm:block" />
+              <Select value={seriesFilter} onValueChange={setSeriesFilter}>
+                <SelectTrigger className="w-56" data-testid="select-series-filter">
+                  <SelectValue placeholder="Filter by series" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Jobs</SelectItem>
+                  {seriesOptions.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.label} ({s.count})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
           )}
 
           {jobsWithoutCoords > 0 && (
-            <Button
-              variant="outline"
-              onClick={handleBackfill}
-              disabled={isBackfilling}
-              data-testid="button-geocode-backfill"
-            >
-              {isBackfilling ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-              Geocode {jobsWithoutCoords} job{jobsWithoutCoords !== 1 ? "s" : ""}
-            </Button>
+            <>
+              <div className="h-6 w-px bg-border hidden sm:block" />
+              <Button
+                variant="outline"
+                onClick={handleBackfill}
+                disabled={isBackfilling}
+                data-testid="button-geocode-backfill"
+              >
+                {isBackfilling ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Geocode {jobsWithoutCoords} job{jobsWithoutCoords !== 1 ? "s" : ""}
+              </Button>
+            </>
           )}
         </div>
       </div>
