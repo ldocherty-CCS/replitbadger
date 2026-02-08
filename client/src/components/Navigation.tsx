@@ -8,7 +8,8 @@ import {
   LogOut, 
   Menu,
   MapPin,
-  ShieldCheck
+  ShieldCheck,
+  BarChart3
 } from "lucide-react";
 import {
   Sheet,
@@ -30,6 +31,7 @@ export function Navigation() {
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/oq", label: "OQ Tracker", icon: ShieldCheck },
     { href: "/map", label: "Map", icon: MapPin },
+    { href: "/analytics", label: "Analytics", icon: BarChart3 },
   ];
 
   if (!user) return null;
@@ -49,7 +51,7 @@ export function Navigation() {
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
                 location === item.href 
                   ? "bg-primary/10 text-primary" 
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  : "text-muted-foreground hover-elevate"
               )} data-testid={`nav-link-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
                 <item.icon className="h-4 w-4" />
                 {item.label}
@@ -92,7 +94,7 @@ export function Navigation() {
                       "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer",
                       location === item.href 
                         ? "bg-primary/10 text-primary" 
-                        : "text-muted-foreground hover:bg-muted"
+                        : "text-muted-foreground hover-elevate"
                     )}>
                       <item.icon className="h-5 w-5" />
                       {item.label}

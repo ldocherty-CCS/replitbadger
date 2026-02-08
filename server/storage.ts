@@ -302,7 +302,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // @ts-ignore
-    const results = await query.orderBy(operators.name, qualifications.name);
+    const results = await query.orderBy(operators.lastName);
     return results.map(row => ({
       ...row,
       operator: row.operator || undefined,
