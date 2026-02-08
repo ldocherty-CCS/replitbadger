@@ -20,12 +20,14 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useJobs, useUpdateJob, useDeleteJob, useDuplicateJob } from "@/hooks/use-jobs";
 import { useOperators } from "@/hooks/use-operators";
-import { JobCard } from "@/components/JobCard";
+import { JobCard, wasContextAction } from "@/components/JobCard";
 import { CreateJobDialog } from "@/components/CreateJobDialog";
 import { PlaceHoldDialog } from "@/components/PlaceHoldDialog";
 import { TimeOffDialog } from "@/components/TimeOffDialog";
-import { useTimeOff } from "@/hooks/use-time-off";
-import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff } from "lucide-react";
+import { JobDetailsDialog } from "@/components/JobDetailsDialog";
+import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
+import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff } from "@/hooks/use-time-off";
+import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, Truck, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getOperatorColor } from "@/lib/operator-colors";
@@ -102,6 +104,8 @@ function DayCell({
   onRestore,
   onCellClick,
   onPlaceHold,
+  onAddNote,
+  onRemoveOff,
   isEvenRow,
   isOff,
 }: { 
@@ -118,6 +122,8 @@ function DayCell({
   onRestore: (job: Job) => void,
   onCellClick: (date: string, operatorId: number) => void,
   onPlaceHold: (date: string, operatorId: number) => void,
+  onAddNote: (date: string, operatorId: number) => void,
+  onRemoveOff: (operatorId: number, date: string) => void,
   isEvenRow?: boolean,
   isOff?: boolean,
 }) {
@@ -151,17 +157,26 @@ function DayCell({
       className={cn(
         "min-h-[80px] p-1.5 border-r border-b hover:bg-accent/40 transition-colors cursor-pointer relative",
         isOff
-          ? "bg-red-50/60 dark:bg-red-950/20"
+          ? "bg-red-200/70 dark:bg-red-900/40"
           : isEvenRow ? "bg-muted/30" : "bg-card/50"
       )}
     >
-      {isOff && jobs.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-[10px] font-semibold text-red-400 dark:text-red-500 uppercase tracking-wider">OFF</span>
+      {isOff && (
+        <div 
+          className="absolute inset-0 flex items-center justify-center cursor-pointer z-[1]"
+          style={{
+            backgroundImage: "repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(239,68,68,0.15) 8px, rgba(239,68,68,0.15) 10px)",
+          }}
+          onClick={(e) => { e.stopPropagation(); onRemoveOff(operatorId, date); }}
+          data-testid={`off-overlay-${operatorId}-${date}`}
+        >
+          {jobs.length === 0 && (
+            <span className="text-sm font-bold text-red-500 dark:text-red-400 uppercase tracking-wider drop-shadow-sm">OFF</span>
+          )}
         </div>
       )}
       <div 
-        className="h-full min-h-[60px]" 
+        className="h-full min-h-[60px] relative z-[2]" 
         onClick={() => onCellClick(date, operatorId)}
         onContextMenu={handleContextMenu}
         data-testid={`cell-${operatorId}-${date}`}
@@ -172,7 +187,7 @@ function DayCell({
           .map((job, idx) => {
           const isAssist = assistantJobIds.has(job.id) && (job as any).assistantOperatorId === operatorId;
           return (
-          <div key={`${job.id}${isAssist ? '-assist' : ''}`} onClick={(e) => { e.stopPropagation(); onJobClick(job); }}>
+          <div key={`${job.id}${isAssist ? '-assist' : ''}`} onClick={(e) => { e.stopPropagation(); if (!wasContextAction()) onJobClick(job); }}>
             <JobCard
               job={job}
               jobIndex={idx}
@@ -192,7 +207,7 @@ function DayCell({
       </div>
       {ctxMenu && (
         <div
-          className="fixed z-50 min-w-[160px] rounded-md border bg-popover p-1 shadow-md"
+          className="fixed z-50 min-w-[180px] rounded-md border bg-popover p-1 shadow-md"
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           data-testid={`cell-context-menu-${operatorId}-${date}`}
         >
@@ -207,6 +222,18 @@ function DayCell({
           >
             <Plus className="w-3.5 h-3.5" />
             Place Hold
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover-elevate cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCtxMenu(null);
+              onAddNote(date, operatorId);
+            }}
+            data-testid={`menu-add-note-${operatorId}-${date}`}
+          >
+            <StickyNote className="w-3.5 h-3.5" />
+            Add Dispatch Note
           </button>
         </div>
       )}
@@ -327,6 +354,9 @@ function DesktopDashboard() {
   const [timeOffOpen, setTimeOffOpen] = useState(false);
   const [timeOffDefaultOp, setTimeOffDefaultOp] = useState<number | null>(null);
   const [mapDate, setMapDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [noteDialog, setNoteDialog] = useState<{ open: boolean; date: string; operatorId: number; editJob?: any }>({ open: false, date: "", operatorId: 0 });
+  const [viewingJob, setViewingJob] = useState<Job | null>(null);
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -411,8 +441,14 @@ function DesktopDashboard() {
       return;
     }
 
+    const targetOp = operators?.find((o: any) => o.id === operatorId);
+    if (targetOp && (targetOp as any).isAssistantOnly) {
+      toast({ title: "Cannot Assign", description: `${targetOp.name} is an assistant-only operator. Assign them as an assistant on a job instead.`, variant: "destructive" });
+      return;
+    }
+
     if (operatorId && dateStr && operatorOffDays.has(`${operatorId}-${dateStr}`)) {
-      const opName = operators?.find((o: any) => o.id === operatorId)?.name || "This operator";
+      const opName = targetOp?.name || "This operator";
       toast({ title: "Cannot Schedule", description: `${opName} has the day off on ${format(parseISO(dateStr), "EEE M/d")}. Remove their time off first.`, variant: "destructive" });
       return;
     }
@@ -465,6 +501,42 @@ function DesktopDashboard() {
 
   const handlePlaceHold = useCallback((date: string, operatorId: number) => {
     setHoldDialog({ open: true, date, operatorId });
+  }, []);
+
+  const handleAddNote = useCallback((date: string, operatorId: number) => {
+    setNoteDialog({ open: true, date, operatorId });
+  }, []);
+
+  const removeTimeOffDay = useRemoveTimeOffDay();
+  const deleteTimeOff = useDeleteTimeOff();
+
+  const handleRemoveOff = useCallback((operatorId: number, date: string) => {
+    const record = timeOffRecords?.find((r) => {
+      const start = r.startDate;
+      const end = r.endDate;
+      return r.operatorId === operatorId && date >= start && date <= end;
+    });
+    if (record) {
+      if (record.startDate === record.endDate) {
+        deleteTimeOff.mutate(record.id);
+      } else {
+        removeTimeOffDay.mutate({ id: record.id, date });
+      }
+    } else {
+      const op = operators?.find((o) => o.id === operatorId);
+      if (op?.isOutOfState) {
+        toast({ title: "Out-of-State Operator", description: "Edit the operator's availability dates to change their schedule.", variant: "destructive" });
+      }
+    }
+  }, [timeOffRecords, operators, deleteTimeOff, removeTimeOffDay, toast]);
+
+  const toggleGroup = useCallback((groupName: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupName)) next.delete(groupName);
+      else next.add(groupName);
+      return next;
+    });
   }, []);
 
   const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
@@ -808,21 +880,29 @@ function DesktopDashboard() {
                   return operators?.map((operator) => {
                     const showGroupHeader = operator.groupName !== lastGroup;
                     if (showGroupHeader) rowIndex = 0;
-                    lastGroup = operator.groupName;
+                    const currentGroup = operator.groupName;
+                    lastGroup = currentGroup;
+                    const isCollapsed = collapsedGroups.has(currentGroup);
                     const isEven = rowIndex % 2 === 0;
                     rowIndex++;
                     return (
                       <div key={operator.id}>
                         {showGroupHeader && (
-                          <div className="flex border-b bg-muted/40">
-                            <div className="w-48 shrink-0 px-3 py-1.5 border-r sticky left-0 z-10 bg-muted/40">
-                              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{operator.groupName}</span>
+                          <div 
+                            className="flex border-b bg-muted/40 cursor-pointer hover:bg-muted/60 transition-colors"
+                            onClick={() => toggleGroup(currentGroup)}
+                            data-testid={`group-header-${currentGroup}`}
+                          >
+                            <div className="w-48 shrink-0 px-3 py-1.5 border-r sticky left-0 z-10 bg-muted/40 flex items-center gap-2">
+                              {isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{currentGroup}</span>
                             </div>
                             {weekDays.map((day) => (
                               <div key={day.iso} className="flex-1 min-w-[140px] border-r last:border-r-0" />
                             ))}
                           </div>
                         )}
+                        {!isCollapsed && (
                         <div className="flex border-b last:border-b-0">
                           <div className={cn(
                             "w-48 shrink-0 px-3 py-2.5 border-r sticky left-0 z-10 flex flex-col justify-center group hover:bg-muted/50 transition-colors",
@@ -860,7 +940,7 @@ function DesktopDashboard() {
                             jobs={cellJobs}
                             locationGroupMap={locationGroupMap}
                             assistantJobIds={assistantJobIds}
-                            onJobClick={(job) => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}
+                            onJobClick={(job) => setViewingJob(job)}
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                             onStatusChange={handleStatusChange}
@@ -868,6 +948,8 @@ function DesktopDashboard() {
                             onRestore={handleRestore}
                             onCellClick={(date, opId) => { setSelectedJob(null); setDefaultDate(date); setDefaultOperatorId(opId); setIsCreateOpen(true); }}
                             onPlaceHold={handlePlaceHold}
+                            onAddNote={handleAddNote}
+                            onRemoveOff={handleRemoveOff}
                             isEvenRow={isEven}
                             isOff={isOff}
                           />
@@ -875,6 +957,7 @@ function DesktopDashboard() {
                       );
                     })}
                         </div>
+                        )}
                       </div>
                     );
                   });
@@ -911,7 +994,7 @@ function DesktopDashboard() {
                       >
                         <div data-testid={`standby-cell-${day.iso}`}>
                           {standbyExpanded && dayStandby.map((job) => (
-                            <div key={job.id} onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
+                            <div key={job.id} onClick={() => setViewingJob(job)}>
                               <JobCard
                                 job={job}
                                 sameLocationIndex={locationGroupMap[job.id]?.index}
@@ -974,7 +1057,7 @@ function DesktopDashboard() {
                             )}
                           </div>
                           {cancelledExpanded && dayCancelled.map((job) => (
-                            <div key={job.id} className="opacity-60" onClick={() => { setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true); }}>
+                            <div key={job.id} className="opacity-60" onClick={() => setViewingJob(job)}>
                               <JobCard
                                 job={job}
                                 onDuplicate={handleDuplicate}
@@ -1099,6 +1182,28 @@ function DesktopDashboard() {
         open={timeOffOpen}
         onOpenChange={setTimeOffOpen}
         defaultOperatorId={timeOffDefaultOp}
+      />
+
+      <JobDetailsDialog
+        job={viewingJob}
+        open={!!viewingJob}
+        onOpenChange={(open) => { if (!open) setViewingJob(null); }}
+        onEdit={(job) => {
+          setViewingJob(null);
+          if (!job.customerId) {
+            setNoteDialog({ open: true, date: job.scheduledDate, operatorId: job.operatorId || 0, editJob: job });
+          } else {
+            setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setIsCreateOpen(true);
+          }
+        }}
+      />
+
+      <DispatchNoteDialog
+        open={noteDialog.open}
+        onOpenChange={(open) => setNoteDialog(prev => ({ ...prev, open }))}
+        date={noteDialog.date}
+        operatorId={noteDialog.operatorId}
+        editJob={noteDialog.editJob}
       />
     </div>
   );

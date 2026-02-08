@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users, Truck, UserCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +67,9 @@ const statusDots: Record<string, string> = {
   standby: "bg-[hsl(270,60%,55%)]",
 };
 
+let _contextActionTimestamp = 0;
+export function wasContextAction() { return Date.now() - _contextActionTimestamp < 300; }
+
 export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, totalJobs, sameLocationIndex, sameLocationTotal, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
   const draggableId = isAssistantEntry ? `job-${job.id}-assist` : `job-${job.id}`;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -81,8 +85,10 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
   } : undefined;
 
-  const statusColorClass = statusColors[job.status] || "bg-gray-400 border-gray-400 text-white";
-  const hasContextMenu = !isOverlay && (onDuplicate || onDelete || onStatusChange || onCancel || onRestore);
+  const statusColorClass = isAssistantEntry
+    ? "bg-[hsl(30,90%,50%)] border-[hsl(30,90%,50%)] text-white"
+    : statusColors[job.status] || "bg-gray-400 border-gray-400 text-white";
+  const hasContextMenu = !isOverlay && !isAssistantEntry && (onDuplicate || onDelete || onStatusChange || onCancel || onRestore);
 
   const missingQuals = (() => {
     const required: string[] = (job.customer as any)?.requiredQuals || [];
@@ -108,7 +114,7 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
           {totalJobs && totalJobs > 1 && jobIndex != null && (
             <span className="mr-1 font-black opacity-80" data-testid={`text-job-order-${job.id}`}>{jobIndex + 1}.</span>
           )}
-          {job.customer?.name || "Unknown Customer"}
+          {job.customerId ? (job.customer?.name || "Unknown Customer") : (job.scope || "Dispatch Note")}
         </h4>
 
         <div className="flex items-center gap-1 text-[11px] opacity-90">
@@ -199,7 +205,7 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
         <ContextMenuContent className="w-52" data-testid={`context-menu-job-${job.id}`}>
           {onDuplicate && (
             <ContextMenuItem
-              onClick={() => onDuplicate(job)}
+              onClick={() => { _contextActionTimestamp = Date.now(); onDuplicate(job); }}
               data-testid={`menu-duplicate-job-${job.id}`}
             >
               <Copy className="w-4 h-4 mr-2" />
@@ -218,7 +224,7 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
                   .map(([key, label]) => (
                   <ContextMenuItem
                     key={key}
-                    onClick={() => onStatusChange(job, key)}
+                    onClick={() => { _contextActionTimestamp = Date.now(); onStatusChange(job, key); }}
                     className={cn(job.status === key && "font-bold")}
                     data-testid={`menu-status-${key}`}
                   >
@@ -234,7 +240,7 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
             <>
               <ContextMenuSeparator />
               <ContextMenuItem
-                onClick={() => onCancel(job)}
+                onClick={() => { _contextActionTimestamp = Date.now(); onCancel(job); }}
                 data-testid={`menu-cancel-job-${job.id}`}
               >
                 <Ban className="w-4 h-4 mr-2" />
@@ -244,7 +250,7 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
           )}
           {onRestore && job.status === "cancelled" && (
             <ContextMenuItem
-              onClick={() => onRestore(job)}
+              onClick={() => { _contextActionTimestamp = Date.now(); onRestore(job); }}
               data-testid={`menu-restore-job-${job.id}`}
             >
               <RotateCcw className="w-4 h-4 mr-2" />
@@ -255,7 +261,7 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
             <>
               <ContextMenuSeparator />
               <ContextMenuItem
-                onClick={() => onDelete(job)}
+                onClick={() => { _contextActionTimestamp = Date.now(); onDelete(job); }}
                 className="text-destructive focus:text-destructive"
                 data-testid={`menu-delete-job-${job.id}`}
               >

@@ -361,7 +361,9 @@ export function CreateJobDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="undefined">Unassigned</SelectItem>
-                        {operators?.map((op) => (
+                        {operators
+                          ?.filter((op) => !(op as any).isAssistantOnly)
+                          .map((op) => (
                           <SelectItem key={op.id} value={op.id.toString()}>
                             {op.name}
                           </SelectItem>
