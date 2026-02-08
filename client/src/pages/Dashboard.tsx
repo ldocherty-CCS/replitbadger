@@ -283,7 +283,7 @@ function AvailabilityChart({
             )}
             data-testid={`availability-day-${day.iso}`}
           >
-            <div className="flex-1 relative h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className="flex-1 relative h-3 rounded-full bg-muted overflow-hidden">
               <div
                 className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
                 style={{
@@ -300,17 +300,19 @@ function AvailabilityChart({
               />
             </div>
             <span className={cn(
-              "text-[11px] font-semibold tabular-nums shrink-0 leading-none",
+              "text-xs font-bold tabular-nums shrink-0 leading-none",
               day.overbooked
                 ? "text-destructive"
                 : day.available === 0
                   ? "text-amber-600 dark:text-amber-400"
-                  : "text-muted-foreground"
+                  : day.available <= 2
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-green-600 dark:text-green-400"
             )}>
               {day.overbooked ? (
                 <>{day.overbookedCount} over</>
               ) : (
-                <>{day.booked}/{day.effectiveTrucks}</>
+                <>{day.available} open</>
               )}
             </span>
           </div>
