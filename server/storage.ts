@@ -1,8 +1,8 @@
 import { db } from "./db";
 import {
-  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff, operatorAvailability, operatorDocuments,
-  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff, type OperatorAvailability, type OperatorDocument,
-  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff, type InsertOperatorAvailability, type InsertOperatorDocument,
+  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff, operatorAvailability, operatorDocuments, customerContacts,
+  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff, type OperatorAvailability, type OperatorDocument, type CustomerContact,
+  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff, type InsertOperatorAvailability, type InsertOperatorDocument, type InsertCustomerContact,
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
   type OperatorQualificationWithDetails
 } from "@shared/schema";
@@ -58,6 +58,12 @@ export interface IStorage {
   getOperatorDocuments(operatorId: number): Promise<OperatorDocument[]>;
   createOperatorDocument(doc: InsertOperatorDocument): Promise<OperatorDocument>;
   deleteOperatorDocument(id: number): Promise<void>;
+
+  // Customer Contacts
+  getCustomerContacts(customerId: number): Promise<CustomerContact[]>;
+  createCustomerContact(contact: InsertCustomerContact): Promise<CustomerContact>;
+  updateCustomerContact(id: number, updates: Partial<InsertCustomerContact>): Promise<CustomerContact>;
+  deleteCustomerContact(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -457,6 +463,25 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOperatorDocument(id: number): Promise<void> {
     await db.delete(operatorDocuments).where(eq(operatorDocuments.id, id));
+  }
+
+  // Customer Contacts
+  async getCustomerContacts(customerId: number): Promise<CustomerContact[]> {
+    return await db.select().from(customerContacts).where(eq(customerContacts.customerId, customerId)).orderBy(customerContacts.name);
+  }
+
+  async createCustomerContact(contact: InsertCustomerContact): Promise<CustomerContact> {
+    const [created] = await db.insert(customerContacts).values(contact).returning();
+    return created;
+  }
+
+  async updateCustomerContact(id: number, updates: Partial<InsertCustomerContact>): Promise<CustomerContact> {
+    const [updated] = await db.update(customerContacts).set(updates).where(eq(customerContacts.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCustomerContact(id: number): Promise<void> {
+    await db.delete(customerContacts).where(eq(customerContacts.id, id));
   }
 }
 

@@ -315,6 +315,46 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // === Customer Contacts ===
+  app.get("/api/customers/:customerId/contacts", async (req, res) => {
+    try {
+      const contacts = await storage.getCustomerContacts(Number(req.params.customerId));
+      res.json(contacts);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch customer contacts" });
+    }
+  });
+
+  app.post("/api/customers/:customerId/contacts", async (req, res) => {
+    try {
+      const contact = await storage.createCustomerContact({
+        ...req.body,
+        customerId: Number(req.params.customerId),
+      });
+      res.status(201).json(contact);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to create customer contact" });
+    }
+  });
+
+  app.put("/api/customer-contacts/:id", async (req, res) => {
+    try {
+      const contact = await storage.updateCustomerContact(Number(req.params.id), req.body);
+      res.json(contact);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update customer contact" });
+    }
+  });
+
+  app.delete("/api/customer-contacts/:id", async (req, res) => {
+    try {
+      await storage.deleteCustomerContact(Number(req.params.id));
+      res.status(204).send();
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete customer contact" });
+    }
+  });
+
   // === Operator Time Off ===
   app.get("/api/time-off", async (req, res) => {
     const filters = {

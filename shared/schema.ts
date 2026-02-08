@@ -55,6 +55,16 @@ export const customers = pgTable("customers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const customerContacts = pgTable("customer_contacts", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").references(() => customers.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  role: text("role"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const jobs = pgTable("jobs", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").references(() => customers.id),
@@ -153,6 +163,7 @@ export const insertCustomerSchema = createInsertSchema(customers).omit({ id: tru
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 export const insertQualificationSchema = createInsertSchema(qualifications).omit({ id: true, createdAt: true });
 export const insertOperatorQualificationSchema = createInsertSchema(operatorQualifications).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCustomerContactSchema = createInsertSchema(customerContacts).omit({ id: true, createdAt: true });
 export const insertOperatorTimeOffSchema = createInsertSchema(operatorTimeOff).omit({ id: true, createdAt: true });
 export const insertOperatorAvailabilitySchema = createInsertSchema(operatorAvailability).omit({ id: true, createdAt: true });
 export const insertOperatorDocumentSchema = createInsertSchema(operatorDocuments).omit({ id: true, createdAt: true });
@@ -167,6 +178,7 @@ export type Qualification = typeof qualifications.$inferSelect;
 export type OperatorQualification = typeof operatorQualifications.$inferSelect;
 export type OperatorTimeOff = typeof operatorTimeOff.$inferSelect;
 export type OperatorAvailability = typeof operatorAvailability.$inferSelect;
+export type CustomerContact = typeof customerContacts.$inferSelect;
 export type OperatorDocument = typeof operatorDocuments.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -175,6 +187,7 @@ export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type InsertQualification = z.infer<typeof insertQualificationSchema>;
 export type InsertOperatorQualification = z.infer<typeof insertOperatorQualificationSchema>;
+export type InsertCustomerContact = z.infer<typeof insertCustomerContactSchema>;
 export type InsertOperatorTimeOff = z.infer<typeof insertOperatorTimeOffSchema>;
 export type InsertOperatorAvailability = z.infer<typeof insertOperatorAvailabilitySchema>;
 export type InsertOperatorDocument = z.infer<typeof insertOperatorDocumentSchema>;
