@@ -276,6 +276,7 @@ function AvailabilityChart({
 
           return (
             <div key={day.iso} className="flex-1 min-w-[140px] flex flex-col items-center gap-0.5 py-1.5" data-testid={`availability-day-${day.iso}`}>
+              <div className="text-[10px] font-medium text-muted-foreground">{day.label}</div>
               <div className="relative w-full flex flex-col items-center" style={{ height: "36px" }}>
                 <div
                   className="absolute bottom-0 w-full max-w-[40px] rounded-sm transition-all duration-300"
