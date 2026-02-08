@@ -80,6 +80,16 @@ export const jobs = pgTable("jobs", {
   ticketCreated: boolean("ticket_created").default(false),
   manifestNeeded: boolean("manifest_needed").default(false),
   
+  // Remote Hose
+  remoteHose: boolean("remote_hose").default(false),
+  remoteHoseLength: text("remote_hose_length"),
+  remoteHoseOperatorId: integer("remote_hose_operator_id").references(() => operators.id),
+  
+  // Site logistics
+  water: text("water"), // "on_site" or "off_site"
+  dump: text("dump"), // "on_site" or "off_site"
+  srNumber: text("sr_number"),
+  
   // Requirements
   siteQuals: text("site_quals").array(),
   additionalOperatorNeeded: boolean("additional_operator_needed").default(false),

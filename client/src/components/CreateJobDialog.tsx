@@ -30,14 +30,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff } from "lucide-react";
+import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff, Copy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTimeOff } from "@/hooks/use-time-off";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 
-// Extend schema to handle string conversion for IDs
 const formSchema = insertJobSchema.extend({
   customerId: z.coerce.number(),
   operatorId: z.coerce.number().optional().nullable(),
@@ -45,8 +44,13 @@ const formSchema = insertJobSchema.extend({
     (val) => (val === "none" || val === "" || val === undefined || val === null ? null : Number(val)),
     z.number().nullable().optional()
   ),
+  remoteHoseOperatorId: z.preprocess(
+    (val) => (val === "none" || val === "" || val === undefined || val === null ? null : Number(val)),
+    z.number().nullable().optional()
+  ),
   additionalOperatorNeeded: z.boolean().default(false),
   manifestNeeded: z.boolean().default(false),
+  remoteHose: z.boolean().default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -89,6 +93,15 @@ export function CreateJobDialog({
       scheduledDate: defaultDate || new Date().toISOString().split("T")[0],
       additionalOperatorNeeded: false,
       manifestNeeded: false,
+      remoteHose: false,
+      remoteHoseLength: "",
+      remoteHoseOperatorId: null,
+      water: "",
+      dump: "",
+      srNumber: "",
+      requestorContact: "",
+      onSiteContact: "",
+      poNumber: "",
     },
   });
 
@@ -99,7 +112,16 @@ export function CreateJobDialog({
         customerId: initialData.customerId ?? undefined,
         operatorId: initialData.operatorId ?? undefined,
         assistantOperatorId: initialData.assistantOperatorId ?? undefined,
+        remoteHoseOperatorId: (initialData as any).remoteHoseOperatorId ?? null,
         scheduledDate: initialData.scheduledDate,
+        remoteHose: (initialData as any).remoteHose ?? false,
+        remoteHoseLength: (initialData as any).remoteHoseLength ?? "",
+        water: (initialData as any).water ?? "",
+        dump: (initialData as any).dump ?? "",
+        srNumber: (initialData as any).srNumber ?? "",
+        requestorContact: initialData.requestorContact ?? "",
+        onSiteContact: initialData.onSiteContact ?? "",
+        poNumber: initialData.poNumber ?? "",
       } as any);
       setIsMultiDay(false);
       setEndDate("");
@@ -114,6 +136,15 @@ export function CreateJobDialog({
         operatorId: defaultOperatorId || undefined,
         additionalOperatorNeeded: false,
         manifestNeeded: false,
+        remoteHose: false,
+        remoteHoseLength: "",
+        remoteHoseOperatorId: null,
+        water: "",
+        dump: "",
+        srNumber: "",
+        requestorContact: "",
+        onSiteContact: "",
+        poNumber: "",
       });
       setIsMultiDay(false);
       setEndDate("");
@@ -122,6 +153,7 @@ export function CreateJobDialog({
 
   const watchedOperatorId = form.watch("operatorId");
   const watchedDate = form.watch("scheduledDate");
+  const watchedRemoteHose = form.watch("remoteHose");
 
   const operatorOffDays = useMemo(() => {
     const offDays = new Set<string>();
@@ -152,17 +184,27 @@ export function CreateJobDialog({
     return operatorOffDays.has(`${watchedOperatorId}-${watchedDate}`);
   }, [watchedOperatorId, watchedDate, operatorOffDays]);
 
+  const handleCopyRequestorToContact = () => {
+    const requestor = form.getValues("requestorContact");
+    if (requestor) {
+      form.setValue("onSiteContact", requestor);
+    }
+  };
+
   const onSubmit = async (values: FormValues) => {
     if (values.operatorId && values.scheduledDate && operatorOffDays.has(`${values.operatorId}-${values.scheduledDate}`)) {
       const opName = operators?.find(o => o.id === values.operatorId)?.name || "This operator";
       toast({ title: "Cannot Schedule", description: `${opName} has the day off on ${values.scheduledDate}. Remove their time off first.`, variant: "destructive" });
       return;
     }
+    if (!values.remoteHose) {
+      values.remoteHoseLength = "";
+      values.remoteHoseOperatorId = null;
+    }
     try {
       if (isEditing && initialData) {
         await updateJob.mutateAsync({ id: initialData.id, ...values });
       } else if (isMultiDay && endDate && endDate > values.scheduledDate) {
-        const { scheduledDate, ...jobData } = values;
         await createJobSeries.mutateAsync({
           job: values,
           startDate: values.scheduledDate,
@@ -190,9 +232,9 @@ export function CreateJobDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Customer */}
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Row 1: Customer + Status */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="customerId"
@@ -204,7 +246,7 @@ export function CreateJobDialog({
                       value={field.value?.toString()}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-customer">
                           <SelectValue placeholder="Select customer" />
                         </SelectTrigger>
                       </FormControl>
@@ -221,7 +263,6 @@ export function CreateJobDialog({
                 )}
               />
 
-              {/* Status */}
               <FormField
                 control={form.control}
                 name="status"
@@ -230,7 +271,7 @@ export function CreateJobDialog({
                     <FormLabel>Status</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-status">
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                       </FormControl>
@@ -248,64 +289,90 @@ export function CreateJobDialog({
                   </FormItem>
                 )}
               />
+            </div>
 
-              {/* Scope */}
-              <div className="col-span-1 md:col-span-2">
-                <FormField
-                  control={form.control}
-                  name="scope"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Scope of Work</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} placeholder="Describe the job scope..." />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Address */}
-              <div className="col-span-1 md:col-span-2">
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Location</FormLabel>
-                      <FormControl>
-                        <AddressAutocomplete
-                          value={field.value}
-                          onChange={field.onChange}
-                          placeholder="Search for job site address..."
-                          data-testid="input-job-address"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Date */}
+            {/* Row 2: Requestor + On Site Contact */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="scheduledDate"
+                name="requestorContact"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{isMultiDay ? "Start Date" : "Date"}</FormLabel>
+                    <FormLabel>Requestor</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-scheduled-date" />
+                      <Input {...field} value={field.value || ""} placeholder="Requestor name & number" data-testid="input-requestor" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {!isEditing && (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 mt-1">
+              <FormField
+                control={form.control}
+                name="onSiteContact"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-center gap-2">
+                      <FormLabel>On Site Contact</FormLabel>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 px-1.5 text-[10px] text-muted-foreground"
+                        onClick={handleCopyRequestorToContact}
+                        data-testid="button-copy-requestor"
+                      >
+                        <Copy className="w-3 h-3 mr-1" />
+                        Same as Requestor
+                      </Button>
+                    </div>
+                    <FormControl>
+                      <Input {...field} value={field.value || ""} placeholder="On-site contact name & number" data-testid="input-onsite-contact" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Row 3: Address (full width) */}
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Address</FormLabel>
+                  <FormControl>
+                    <AddressAutocomplete
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Search for job site address..."
+                      data-testid="input-job-address"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Row 4: Date + Time */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <FormField
+                  control={form.control}
+                  name="scheduledDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{isMultiDay ? "Start Date" : "Date"}</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-scheduled-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {!isEditing && (
+                  <div className="flex items-center gap-2">
                     <Checkbox
                       checked={isMultiDay}
                       onCheckedChange={(checked) => {
@@ -314,42 +381,211 @@ export function CreateJobDialog({
                       }}
                       data-testid="checkbox-multi-day"
                     />
-                    <label className="flex items-center gap-1.5 text-sm font-medium cursor-pointer">
-                      <CalendarRange className="w-4 h-4" />
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <CalendarRange className="w-3.5 h-3.5" />
                       Multi-day job
                     </label>
-                  </div>
-                  {isMultiDay && (
-                    <div>
-                      <label className="text-sm font-medium">End Date</label>
+                    {isMultiDay && (
                       <Input
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
                         min={form.watch("scheduledDate")}
+                        className="w-auto"
                         data-testid="input-end-date"
                       />
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
 
-              {/* Time */}
               <FormField
                 control={form.control}
                 name="startTime"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start Time</FormLabel>
+                    <FormLabel>Time</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="e.g. 08:00 AM" />
+                      <Input {...field} placeholder="e.g. 08:00 AM" data-testid="input-start-time" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Row 5: Job # / PO # + SR # */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="poNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Job # / PO #</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value || ""} placeholder="Job or PO number" data-testid="input-po-number" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {/* Operator */}
+              <FormField
+                control={form.control}
+                name="srNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SR #</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value || ""} placeholder="SR number" data-testid="input-sr-number" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Row 6: Remote Hose */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-4 flex-wrap">
+                <FormField
+                  control={form.control}
+                  name="remoteHose"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(!!checked);
+                            if (!checked) {
+                              form.setValue("remoteHoseOperatorId", null);
+                              form.setValue("remoteHoseLength", "");
+                            }
+                          }}
+                          data-testid="checkbox-remote-hose"
+                        />
+                      </FormControl>
+                      <FormLabel className="cursor-pointer">Remote Hose</FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                {watchedRemoteHose && (
+                  <FormField
+                    control={form.control}
+                    name="remoteHoseLength"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                        <FormLabel className="whitespace-nowrap text-sm">Length:</FormLabel>
+                        <FormControl>
+                          <Input {...field} value={field.value || ""} placeholder="e.g. 200ft" className="w-24" data-testid="input-remote-hose-length" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+
+              {watchedRemoteHose && (
+                <FormField
+                  control={form.control}
+                  name="remoteHoseOperatorId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Remote Hose Assistant</FormLabel>
+                      <Select
+                        onValueChange={(val) => field.onChange(val === "none" ? null : val)}
+                        value={field.value ? field.value.toString() : "none"}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-remote-hose-operator">
+                            <SelectValue placeholder="Select assistant for remote hose" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Not assigned yet</SelectItem>
+                          {operators
+                            ?.filter((op) => op.id !== form.watch("operatorId"))
+                            .map((op) => (
+                              <SelectItem key={op.id} value={op.id.toString()}>
+                                {op.name}
+                                {op.operatorType === "local_assistant" ? " (Assistant)" : ""}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
+            {/* Row 7: Water + Dump */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="water"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Water</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-water">
+                          <SelectValue placeholder="Select water source" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="on_site">On Site</SelectItem>
+                        <SelectItem value="off_site">Off Site</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="dump"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Dump</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-dump">
+                          <SelectValue placeholder="Select dump location" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="on_site">On Site</SelectItem>
+                        <SelectItem value="off_site">Off Site</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Row 8: Scope of Work (full width) */}
+            <FormField
+              control={form.control}
+              name="scope"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Scope of Work</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} placeholder="Describe the job scope..." data-testid="input-scope" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Row 9: Operator assignment */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="operatorId"
@@ -361,7 +597,7 @@ export function CreateJobDialog({
                       value={field.value ? field.value.toString() : "undefined"}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-operator">
                           <SelectValue placeholder="Unassigned" />
                         </SelectTrigger>
                       </FormControl>
@@ -381,30 +617,12 @@ export function CreateJobDialog({
                 )}
               />
 
-              {isOperatorOff && (
-                <div className="col-span-full flex items-center gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30" data-testid="warning-operator-off">
-                  <CalendarOff className="w-4 h-4 text-destructive shrink-0" />
-                  <span className="text-sm text-destructive font-medium">
-                    {operators?.find(o => o.id === watchedOperatorId)?.name || "This operator"} has the day off on this date. Remove their time off first to schedule here.
-                  </span>
-                </div>
-              )}
-
-              {/* Qualification Warning */}
-              <QualificationWarning 
-                customerId={form.watch("customerId")} 
-                operatorId={form.watch("operatorId")} 
-                customers={customers} 
-                operators={operators} 
-              />
-
-              {/* Additional Operator */}
-              <div className="col-span-1 md:col-span-2 space-y-3">
+              <div className="space-y-2">
                 <FormField
                   control={form.control}
                   name="additionalOperatorNeeded"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                    <FormItem className="flex flex-row items-center gap-2 space-y-0 mt-7">
                       <FormControl>
                         <Checkbox
                           checked={field.value}
@@ -431,7 +649,6 @@ export function CreateJobDialog({
                     name="assistantOperatorId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Assistant Operator</FormLabel>
                         <Select
                           onValueChange={(val) => field.onChange(val === "none" ? null : val)}
                           value={field.value ? field.value.toString() : "none"}
@@ -459,28 +676,29 @@ export function CreateJobDialog({
                   />
                 )}
               </div>
-
-              {/* Contact Info */}
-              <FormField
-                control={form.control}
-                name="onSiteContact"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Site Contact</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} placeholder="Name & Number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
 
+            {isOperatorOff && (
+              <div className="flex items-center gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30" data-testid="warning-operator-off">
+                <CalendarOff className="w-4 h-4 text-destructive shrink-0" />
+                <span className="text-sm text-destructive font-medium">
+                  {operators?.find(o => o.id === watchedOperatorId)?.name || "This operator"} has the day off on this date. Remove their time off first to schedule here.
+                </span>
+              </div>
+            )}
+
+            <QualificationWarning 
+              customerId={form.watch("customerId")} 
+              operatorId={form.watch("operatorId")} 
+              customers={customers} 
+              operators={operators} 
+            />
+
             <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
                 Cancel
               </Button>
-              <Button type="submit" disabled={isPending}>
+              <Button type="submit" disabled={isPending} data-testid="button-submit-job">
                 {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {isEditing ? "Save Changes" : "Create Job"}
               </Button>
@@ -515,7 +733,7 @@ function QualificationWarning({ customerId, operatorId, customers, operators }: 
 
   if (warning.ok) {
     return (
-      <div className="col-span-1 md:col-span-2 flex items-center gap-2 text-sm text-green-600 bg-green-50 dark:bg-green-950/30 dark:text-green-400 rounded-md p-2.5" data-testid="text-qual-ok">
+      <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 dark:bg-green-950/30 dark:text-green-400 rounded-md p-2.5" data-testid="text-qual-ok">
         <ShieldCheck className="w-4 h-4 shrink-0" />
         <span>{warning.operator} meets all certification requirements</span>
       </div>
@@ -523,7 +741,7 @@ function QualificationWarning({ customerId, operatorId, customers, operators }: 
   }
 
   return (
-    <div className="col-span-1 md:col-span-2 rounded-md border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-2.5 space-y-1.5" data-testid="text-qual-warning">
+    <div className="rounded-md border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-950/30 p-2.5 space-y-1.5" data-testid="text-qual-warning">
       <div className="flex items-center gap-2 text-sm font-medium text-orange-700 dark:text-orange-400">
         <AlertTriangleIcon className="w-4 h-4 shrink-0" />
         <span>{warning.operator} is missing required certifications for {warning.customer}</span>

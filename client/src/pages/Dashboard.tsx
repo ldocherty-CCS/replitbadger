@@ -34,8 +34,7 @@ import { getOperatorColor } from "@/lib/operator-colors";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { DroppableDay } from "@/components/DroppableDay";
 import { useToast } from "@/hooks/use-toast";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { useGoogleMapsReady } from "@/components/AddressAutocomplete";
 
 const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   dispatched: { hex: "#22c55e", label: "Dispatched" },
@@ -57,37 +56,12 @@ function escapeHtml(str: string): string {
   return div.innerHTML;
 }
 
-function createJobMarkerIcon(color: string) {
-  return L.divIcon({
-    className: "custom-marker",
-    html: `<div style="
-      width: 24px; height: 24px; 
-      background: ${color}; 
-      border: 3px solid white; 
-      border-radius: 50%; 
-      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-    "></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12],
-  });
+function createJobMarkerSvg(color: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="${color}" stroke="white" stroke-width="3"/></svg>`)}`;
 }
 
-function createTruckMarkerIcon(color: string) {
-  return L.divIcon({
-    className: "custom-marker",
-    html: `<div style="
-      width: 28px; height: 28px; 
-      background: ${color}; 
-      border: 3px solid white; 
-      border-radius: 4px; 
-      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-      display: flex; align-items: center; justify-content: center;
-    "><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14],
-  });
+function createTruckMarkerSvg(color: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><rect x="2" y="2" width="24" height="24" rx="4" fill="${color}" stroke="white" stroke-width="3"/><g transform="translate(6,6)"><path d="M10 14V4a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 1 4v8.25a.75.75 0 0 0 .75.75h1.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.25 14H6.75" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="M14.25 14h1.5a.75.75 0 0 0 .75-.75v-2.74a.75.75 0 0 0-.165-.468l-2.61-3.26A.75.75 0 0 0 13.14 6.5H10.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12.75" cy="14" r="1.5" fill="none" stroke="white" stroke-width="1.5"/><circle cx="5.25" cy="14" r="1.5" fill="none" stroke="white" stroke-width="1.5"/></g></svg>`)}`;
 }
 
 function DayCell({ 
@@ -167,7 +141,8 @@ function DayCell({
           style={{
             backgroundImage: "repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(239,68,68,0.15) 8px, rgba(239,68,68,0.15) 10px)",
           }}
-          onClick={(e) => { e.stopPropagation(); onRemoveOff(operatorId, date); }}
+          onClick={(e) => { e.stopPropagation(); }}
+          onContextMenu={handleContextMenu}
           data-testid={`off-overlay-${operatorId}-${date}`}
         >
           {jobs.length === 0 && (
@@ -211,6 +186,20 @@ function DayCell({
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           data-testid={`cell-context-menu-${operatorId}-${date}`}
         >
+          {isOff && (
+            <button
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover-elevate cursor-pointer text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCtxMenu(null);
+                onRemoveOff(operatorId, date);
+              }}
+              data-testid={`menu-remove-off-${operatorId}-${date}`}
+            >
+              <CalendarOff className="w-3.5 h-3.5" />
+              Remove Day Off
+            </button>
+          )}
           <button
             className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover-elevate cursor-pointer"
             onClick={(e) => {
@@ -267,17 +256,20 @@ function AvailabilityChart({
   });
 
   return (
-    <div className="border-t bg-card px-4 py-3" data-testid="availability-chart">
-      <div className="flex gap-2 items-end h-16">
+    <div className="border-t bg-card shrink-0" data-testid="availability-chart">
+      <div className="flex items-end">
+        <div className="w-48 shrink-0 px-3 py-2 flex items-end justify-center">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Availability</span>
+        </div>
         {dayStats.map((day) => {
           const availableRatio = day.effectiveTrucks > 0 ? day.available / day.effectiveTrucks : 0;
           const barHeight = day.overbooked ? 100 : Math.max(6, availableRatio * 100);
 
           return (
-            <div key={day.iso} className="flex-1 flex flex-col items-center gap-1" data-testid={`availability-day-${day.iso}`}>
-              <div className="relative w-full flex flex-col items-center" style={{ height: "48px" }}>
+            <div key={day.iso} className="flex-1 min-w-[140px] flex flex-col items-center gap-0.5 py-1.5" data-testid={`availability-day-${day.iso}`}>
+              <div className="relative w-full flex flex-col items-center" style={{ height: "36px" }}>
                 <div
-                  className="absolute bottom-0 w-full max-w-[48px] rounded-md transition-all duration-300"
+                  className="absolute bottom-0 w-full max-w-[40px] rounded-sm transition-all duration-300"
                   style={{
                     height: `${barHeight}%`,
                     background: day.overbooked
@@ -290,20 +282,15 @@ function AvailabilityChart({
                   data-testid={`bar-${day.iso}`}
                 />
               </div>
-              <div className="text-center mt-0.5">
-                <div className={cn(
-                  "text-xs font-bold leading-tight",
-                  day.overbooked ? "text-destructive" : day.available === 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
-                )}>
-                  {day.overbooked ? (
-                    <span>{day.overbookedCount} over</span>
-                  ) : (
-                    <span>{day.available}/{day.effectiveTrucks}</span>
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground leading-tight font-medium">
-                  {format(day.date, "EEE")}
-                </div>
+              <div className={cn(
+                "text-[11px] font-bold leading-tight",
+                day.overbooked ? "text-destructive" : day.available === 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
+              )}>
+                {day.overbooked ? (
+                  <span>{day.overbookedCount} over</span>
+                ) : (
+                  <span>{day.available}/{day.effectiveTrucks}</span>
+                )}
               </div>
             </div>
           );
@@ -366,8 +353,10 @@ function DesktopDashboard() {
   const { toast } = useToast();
 
   const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<L.Map | null>(null);
-  const markersLayer = useRef<L.LayerGroup | null>(null);
+  const googleMap = useRef<google.maps.Map | null>(null);
+  const googleMarkers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const googleInfoWindow = useRef<google.maps.InfoWindow | null>(null);
+  const mapsReady = useGoogleMapsReady();
 
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -564,61 +553,37 @@ function DesktopDashboard() {
     document.addEventListener("mouseup", handleMouseUp);
   }, []);
 
-  const mapObserver = useRef<ResizeObserver | null>(null);
-
   useEffect(() => {
-    if (mapObserver.current) {
-      mapObserver.current.disconnect();
-      mapObserver.current = null;
-    }
-
-    if (!mapVisible) {
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
-        markersLayer.current = null;
-      }
+    if (!mapVisible || !mapsReady || !mapRef.current) {
       return;
     }
 
-    if (!mapRef.current) return;
+    if (googleMap.current) return;
 
-    leafletMap.current = L.map(mapRef.current, {
-      center: DEFAULT_CENTER,
+    googleMap.current = new google.maps.Map(mapRef.current, {
+      center: { lat: DEFAULT_CENTER[0], lng: DEFAULT_CENTER[1] },
       zoom: 10,
+      mapId: "badger-dispatch-map",
+      gestureHandling: "greedy",
+      disableDefaultUI: false,
       zoomControl: true,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(leafletMap.current);
+    googleInfoWindow.current = new google.maps.InfoWindow();
 
-    markersLayer.current = L.layerGroup().addTo(leafletMap.current);
-
-    [100, 300, 600, 1200].forEach(delay => {
-      setTimeout(() => leafletMap.current?.invalidateSize(), delay);
-    });
-
-    mapObserver.current = new ResizeObserver(() => {
-      leafletMap.current?.invalidateSize();
-    });
-    mapObserver.current.observe(mapRef.current);
-
-    return () => {
-      if (mapObserver.current) {
-        mapObserver.current.disconnect();
-        mapObserver.current = null;
-      }
-    };
-  }, [mapVisible]);
+    return () => {};
+  }, [mapVisible, mapsReady]);
 
   useEffect(() => {
-    if (leafletMap.current) {
-      setTimeout(() => leafletMap.current?.invalidateSize(), 50);
-      setTimeout(() => leafletMap.current?.invalidateSize(), 300);
+    if (!mapVisible && googleMap.current) {
+      googleMarkers.current.forEach(m => m.map = null);
+      googleMarkers.current = [];
+      googleMap.current = null;
     }
-  }, [splitPercent]);
+  }, [mapVisible]);
 
   const mapFilteredJobs = useMemo(() => {
     if (!jobs) return [];
@@ -629,11 +594,13 @@ function DesktopDashboard() {
   const mapTruckMarkers = operators?.filter((op: any) => op.truckLat != null && op.truckLng != null).length || 0;
 
   useEffect(() => {
-    if (!leafletMap.current || !markersLayer.current) return;
+    if (!googleMap.current || !google.maps.marker?.AdvancedMarkerElement) return;
 
-    markersLayer.current.clearLayers();
+    googleMarkers.current.forEach(m => m.map = null);
+    googleMarkers.current = [];
 
-    const bounds = L.latLngBounds([]);
+    const bounds = new google.maps.LatLngBounds();
+    let hasPoints = false;
 
     if (operators) {
       operators.forEach((op: any) => {
@@ -651,17 +618,31 @@ function DesktopDashboard() {
             markerLat = prevDayJob.lat;
             markerLng = prevDayJob.lng;
             locationLabel = prevDayJob.address || "Previous job site";
-            locationNote = "Out-of-State \u2014 Near Previous Job";
+            locationNote = "Out-of-State — Near Previous Job";
           }
         }
 
         if (markerLat != null && markerLng != null) {
-          bounds.extend([markerLat, markerLng]);
-          const icon = createTruckMarkerIcon(getOperatorColor(op));
+          bounds.extend({ lat: markerLat, lng: markerLng });
+          hasPoints = true;
+
+          const iconImg = document.createElement("img");
+          iconImg.src = createTruckMarkerSvg(getOperatorColor(op));
+          iconImg.width = 28;
+          iconImg.height = 28;
+          iconImg.style.cursor = "pointer";
+
+          const marker = new google.maps.marker.AdvancedMarkerElement({
+            map: googleMap.current!,
+            position: { lat: markerLat, lng: markerLng },
+            content: iconImg,
+            title: op.name,
+          });
+
           const outOfStateBadge = op.isOutOfState
-            ? '<div style="font-size:10px;color:#f59e0b;font-weight:600;margin-top:4px;">OUT OF STATE</div>'
+            ? `<div style="font-size:10px;color:#f59e0b;font-weight:600;margin-top:4px;">OUT OF STATE</div>`
             : '';
-          const popup = L.popup().setContent(`
+          const infoContent = `
             <div style="min-width: 160px; font-family: system-ui, sans-serif;">
               <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${escapeHtml(op.name)}</div>
               ${outOfStateBadge}
@@ -669,8 +650,14 @@ function DesktopDashboard() {
               <div style="font-size: 12px; margin-top: 2px;">${escapeHtml(locationLabel)}</div>
               <div style="font-size: 11px; color: #888; margin-top: 4px;">${escapeHtml(op.groupName)}</div>
             </div>
-          `);
-          L.marker([markerLat, markerLng], { icon }).addTo(markersLayer.current!).bindPopup(popup);
+          `;
+
+          marker.addListener("gmp-click", () => {
+            googleInfoWindow.current?.setContent(infoContent);
+            googleInfoWindow.current?.open({ anchor: marker, map: googleMap.current! });
+          });
+
+          googleMarkers.current.push(marker);
         }
       });
     }
@@ -679,15 +666,32 @@ function DesktopDashboard() {
       if (job.lat == null || job.lng == null) return;
       const lat = job.lat!;
       const lng = job.lng!;
-      bounds.extend([lat, lng]);
+      bounds.extend({ lat, lng });
+      hasPoints = true;
 
       const markerColor = STATUS_COLORS[job.status]?.hex || "#9ca3af";
-      const icon = createJobMarkerIcon(markerColor);
+      const iconImg = document.createElement("img");
+      iconImg.src = createJobMarkerSvg(markerColor);
+      iconImg.width = 24;
+      iconImg.height = 24;
+      iconImg.style.cursor = "pointer";
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map: googleMap.current!,
+        position: { lat, lng },
+        content: iconImg,
+        title: job.customer?.name || "Job",
+      });
+
       const operatorName = escapeHtml(job.operator?.name || "Unassigned");
       const customerName = escapeHtml(job.customer?.name || "Unknown");
       const statusLabel = STATUS_COLORS[job.status]?.label || job.status;
+      const assignedOp = operators?.find((o: any) => o.id === job.operatorId);
+      const hasTruckLoc = assignedOp && assignedOp.truckLat != null && assignedOp.truckLng != null;
+      const travelTimeId = `travel-time-${job.id}`;
+      const travelBtnId = `travel-btn-${job.id}`;
 
-      const popup = L.popup().setContent(`
+      const infoContent = `
         <div style="min-width: 180px; font-family: system-ui, sans-serif;">
           <div style="font-weight: 600; font-size: 13px; margin-bottom: 4px;">${customerName}</div>
           <div style="font-size: 11px; color: #666;">${escapeHtml(job.scope || "")}</div>
@@ -696,22 +700,64 @@ function DesktopDashboard() {
           <div style="font-size: 11px;"><strong>Date:</strong> ${escapeHtml(job.scheduledDate)}</div>
           <div style="font-size: 11px;"><strong>Time:</strong> ${escapeHtml(job.startTime || "")}</div>
           <div style="font-size: 11px;"><strong>Status:</strong> 
-            <span style="
-              display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 10px;
-              background: ${markerColor}20; color: ${markerColor}; font-weight: 600;
-            ">${escapeHtml(statusLabel)}</span>
+            <span style="display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 10px; background: ${markerColor}20; color: ${markerColor}; font-weight: 600;">${escapeHtml(statusLabel)}</span>
           </div>
           <div style="font-size: 11px; margin-top: 3px; color: #888;">${escapeHtml(job.address || "")}</div>
+          ${hasTruckLoc ? `
+            <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #eee;">
+              <div id="${travelTimeId}" style="font-size: 11px; color: #666;"></div>
+              <button id="${travelBtnId}" style="font-size: 11px; color: #2563eb; cursor: pointer; background: none; border: none; padding: 2px 0; text-decoration: underline;">
+                Calculate drive time from truck
+              </button>
+            </div>
+          ` : ''}
         </div>
-      `);
+      `;
 
-      L.marker([lat, lng], { icon }).addTo(markersLayer.current!).bindPopup(popup);
+      marker.addListener("gmp-click", () => {
+        googleInfoWindow.current?.setContent(infoContent);
+        googleInfoWindow.current?.open({ anchor: marker, map: googleMap.current! });
+
+        if (hasTruckLoc) {
+          setTimeout(() => {
+            const btn = document.getElementById(travelBtnId);
+            const display = document.getElementById(travelTimeId);
+            if (btn && display) {
+              btn.addEventListener("click", async () => {
+                btn.textContent = "Calculating...";
+                btn.style.color = "#888";
+                try {
+                  const resp = await fetch(`/api/travel-time?originLat=${assignedOp!.truckLat}&originLng=${assignedOp!.truckLng}&destLat=${lat}&destLng=${lng}`);
+                  const result = await resp.json();
+                  if (result.duration) {
+                    display.innerHTML = `<strong style="color:#16a34a;">${result.duration}</strong> &middot; ${result.distance}`;
+                    btn.style.display = "none";
+                  } else {
+                    display.textContent = "Unable to calculate route";
+                    btn.style.display = "none";
+                  }
+                } catch {
+                  display.textContent = "Error calculating route";
+                  btn.style.display = "none";
+                }
+              });
+            }
+          }, 100);
+        }
+      });
+
+      googleMarkers.current.push(marker);
     });
 
-    if (bounds.isValid()) {
-      leafletMap.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+    if (hasPoints) {
+      googleMap.current.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
+      const listener = googleMap.current.addListener("idle", () => {
+        const zoom = googleMap.current?.getZoom();
+        if (zoom && zoom > 13) googleMap.current?.setZoom(13);
+        google.maps.event.removeListener(listener);
+      });
     }
-  }, [mapFilteredJobs, operators, mapDate]);
+  }, [mapFilteredJobs, operators, mapDate, mapsReady]);
 
   if (jobsLoading || opsLoading) {
     return (

@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash } from "lucide-react";
+import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash, Droplets, Trash2, Cable } from "lucide-react";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { format, parseISO } from "date-fns";
 
@@ -99,23 +99,40 @@ export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetails
 
           {(job.onSiteContact || job.requestorContact) && (
             <div className="grid grid-cols-2 gap-4">
-              {job.onSiteContact && (
-                <DetailRow icon={<Phone className="w-4 h-4" />} label="On-Site Contact" value={job.onSiteContact} testId="detail-onsite-contact" />
-              )}
               {job.requestorContact && (
                 <DetailRow icon={<Phone className="w-4 h-4" />} label="Requestor" value={job.requestorContact} testId="detail-requestor" />
+              )}
+              {job.onSiteContact && (
+                <DetailRow icon={<Phone className="w-4 h-4" />} label="On-Site Contact" value={job.onSiteContact} testId="detail-onsite-contact" />
               )}
             </div>
           )}
 
-          {(job.billingInfo || job.poNumber) && (
+          {(job.poNumber || (job as any).srNumber) && (
             <div className="grid grid-cols-2 gap-4">
-              {job.billingInfo && (
-                <DetailRow icon={<FileText className="w-4 h-4" />} label="Billing" value={job.billingInfo} testId="detail-billing" />
-              )}
               {job.poNumber && (
-                <DetailRow icon={<Hash className="w-4 h-4" />} label="PO Number" value={job.poNumber} testId="detail-po" />
+                <DetailRow icon={<Hash className="w-4 h-4" />} label="Job # / PO #" value={job.poNumber} testId="detail-po" />
               )}
+              {(job as any).srNumber && (
+                <DetailRow icon={<FileText className="w-4 h-4" />} label="SR #" value={(job as any).srNumber} testId="detail-sr" />
+              )}
+            </div>
+          )}
+
+          {((job as any).water || (job as any).dump) && (
+            <div className="grid grid-cols-2 gap-4">
+              {(job as any).water && (
+                <DetailRow icon={<Droplets className="w-4 h-4" />} label="Water" value={(job as any).water === "on_site" ? "On Site" : "Off Site"} testId="detail-water" />
+              )}
+              {(job as any).dump && (
+                <DetailRow icon={<Trash2 className="w-4 h-4" />} label="Dump" value={(job as any).dump === "on_site" ? "On Site" : "Off Site"} testId="detail-dump" />
+              )}
+            </div>
+          )}
+
+          {(job as any).remoteHose && (
+            <div className="grid grid-cols-2 gap-4">
+              <DetailRow icon={<Cable className="w-4 h-4" />} label="Remote Hose" value={(job as any).remoteHoseLength ? `Yes - ${(job as any).remoteHoseLength}` : "Yes"} testId="detail-remote-hose" />
             </div>
           )}
 

@@ -20,6 +20,37 @@ export async function registerRoutes(
     res.json({ key });
   });
 
+  // === Travel Time (Distance Matrix API) ===
+  app.get("/api/travel-time", async (req, res) => {
+    const { originLat, originLng, destLat, destLng } = req.query;
+    if (!originLat || !originLng || !destLat || !destLng) {
+      return res.status(400).json({ message: "Missing coordinates" });
+    }
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (!key) return res.status(404).json({ message: "Maps API key not configured" });
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originLat},${originLng}&destinations=${destLat},${destLng}&key=${key}&units=imperial`;
+      const response = await fetch(url);
+      const data = await response.json() as any;
+      
+      if (data.status === "OK" && data.rows?.[0]?.elements?.[0]?.status === "OK") {
+        const element = data.rows[0].elements[0];
+        res.json({
+          duration: element.duration.text,
+          durationSeconds: element.duration.value,
+          distance: element.distance.text,
+          distanceMeters: element.distance.value,
+        });
+      } else {
+        res.json({ duration: null, distance: null });
+      }
+    } catch (error) {
+      console.error("Travel time API error:", error);
+      res.status(500).json({ message: "Failed to calculate travel time" });
+    }
+  });
+
   // === Operators ===
   app.get(api.operators.list.path, async (req, res) => {
     const operators = await storage.getOperators();

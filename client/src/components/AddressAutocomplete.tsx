@@ -27,9 +27,9 @@ let googleMapsScriptLoaded = false;
 let googleMapsScriptLoading = false;
 const loadCallbacks: (() => void)[] = [];
 
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
+export function loadGoogleMapsScript(apiKey: string): Promise<void> {
   return new Promise((resolve) => {
-    if (googleMapsScriptLoaded && (window as any).google?.maps?.places) {
+    if (googleMapsScriptLoaded && (window as any).google?.maps) {
       resolve();
       return;
     }
@@ -40,7 +40,7 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
     googleMapsScriptLoading = true;
 
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,marker`;
     script.async = true;
     script.defer = true;
     script.onload = () => {
@@ -59,6 +59,24 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
   });
 }
 
+export function useGoogleMapsReady() {
+  const [isReady, setIsReady] = useState(
+    () => googleMapsScriptLoaded && !!(window as any).google?.maps
+  );
+  const { data: mapsConfig } = useQuery<{ key: string }>({
+    queryKey: ["/api/config/maps-key"],
+  });
+
+  useEffect(() => {
+    if (!mapsConfig?.key) return;
+    loadGoogleMapsScript(mapsConfig.key).then(() => {
+      setIsReady(true);
+    });
+  }, [mapsConfig?.key]);
+
+  return isReady;
+}
+
 export function AddressAutocomplete({
   value,
   onChange,
@@ -72,22 +90,18 @@ export function AddressAutocomplete({
 }: AddressAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const [isReady, setIsReady] = useState(false);
   const [internalValue, setInternalValue] = useState(defaultValue || "");
+
+  const onChangeRef = useRef(onChange);
+  const onPlaceSelectRef = useRef(onPlaceSelect);
+  const valueRef = useRef(value);
+  onChangeRef.current = onChange;
+  onPlaceSelectRef.current = onPlaceSelect;
+  valueRef.current = value;
 
   const displayValue = value !== undefined ? value : internalValue;
 
-  const { data: mapsConfig } = useQuery<{ key: string }>({
-    queryKey: ["/api/config/maps-key"],
-  });
-
-  useEffect(() => {
-    if (!mapsConfig?.key) return;
-
-    loadGoogleMapsScript(mapsConfig.key).then(() => {
-      setIsReady(true);
-    });
-  }, [mapsConfig?.key]);
+  const isReady = useGoogleMapsReady();
 
   const initAutocomplete = useCallback(() => {
     if (!isReady || !inputRef.current || autocompleteRef.current) return;
@@ -107,16 +121,16 @@ export function AddressAutocomplete({
           lng: place.geometry?.location?.lng() || 0,
         };
 
-        if (value === undefined) {
+        if (valueRef.current === undefined) {
           setInternalValue(result.address);
         }
-        onChange?.(result.address);
-        onPlaceSelect?.(result);
+        onChangeRef.current?.(result.address);
+        onPlaceSelectRef.current?.(result);
       }
     });
 
     autocompleteRef.current = autocomplete;
-  }, [isReady, onChange, onPlaceSelect, value]);
+  }, [isReady]);
 
   useEffect(() => {
     initAutocomplete();
@@ -153,7 +167,7 @@ export function AddressAutocomplete({
         autoComplete="off"
         data-testid={testId}
       />
-      {!isReady && mapsConfig?.key && (
+      {!isReady && (
         <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
       )}
     </div>
