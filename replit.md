@@ -41,6 +41,7 @@ Preferred communication style: Simple, everyday language.
   - `customers` — Clients with contact info and required qualifications
   - `jobs` — Scheduled jobs linking customers and operators, with status, dates, times, addresses
   - `operator_qualifications` — OQ tracking records linking operators to qualifications with issue/expiration dates, document info, status
+  - `operator_documents` — Uploaded documents per operator (name, objectPath, contentType, size, uploadedBy)
   - `sessions` — PostgreSQL-backed session store (created by connect-pg-simple)
 
 ### Authentication & Authorization
@@ -159,3 +160,16 @@ Operators have `truckLat` and `truckLng` fields for mapping their truck parking 
 - `react-hook-form` — Form handling
 - `date-fns` — Date utilities
 - `wouter` — Client-side routing
+- `@google-cloud/storage` + `@uppy/core` — Object storage file uploads
+
+### Operator Documents
+- Documents can be uploaded per operator via the Documents button on operator cards
+- Uses Replit App Storage (Object Storage) with presigned URL upload flow
+- API: `GET /api/operators/:id/documents`, `POST /api/operators/:id/documents`, `DELETE /api/operator-documents/:id`
+- Object storage routes registered via `registerObjectStorageRoutes` in routes.ts
+- Frontend uses `useUpload` hook from `@/hooks/use-upload` for custom upload UI
+
+### Searchable Group/Region Input
+- Operator create/edit dialog uses a Popover/Command combobox for the Group/Region field
+- Suggests existing group names from all operators, allows typing new group names
+- Uses `existingGroups` derived from operators data with deduplication

@@ -1,8 +1,8 @@
 import { db } from "./db";
 import {
-  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff, operatorAvailability,
-  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff, type OperatorAvailability,
-  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff, type InsertOperatorAvailability,
+  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff, operatorAvailability, operatorDocuments,
+  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff, type OperatorAvailability, type OperatorDocument,
+  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff, type InsertOperatorAvailability, type InsertOperatorDocument,
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
   type OperatorQualificationWithDetails
 } from "@shared/schema";
@@ -53,6 +53,11 @@ export interface IStorage {
   createOperatorAvailability(avail: InsertOperatorAvailability): Promise<OperatorAvailability>;
   updateOperatorAvailability(id: number, data: Partial<InsertOperatorAvailability>): Promise<OperatorAvailability>;
   deleteOperatorAvailability(id: number): Promise<void>;
+
+  // Operator Documents
+  getOperatorDocuments(operatorId: number): Promise<OperatorDocument[]>;
+  createOperatorDocument(doc: InsertOperatorDocument): Promise<OperatorDocument>;
+  deleteOperatorDocument(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -439,6 +444,19 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOperatorAvailability(id: number): Promise<void> {
     await db.delete(operatorAvailability).where(eq(operatorAvailability.id, id));
+  }
+
+  async getOperatorDocuments(operatorId: number): Promise<OperatorDocument[]> {
+    return await db.select().from(operatorDocuments).where(eq(operatorDocuments.operatorId, operatorId)).orderBy(desc(operatorDocuments.createdAt));
+  }
+
+  async createOperatorDocument(doc: InsertOperatorDocument): Promise<OperatorDocument> {
+    const [result] = await db.insert(operatorDocuments).values(doc).returning();
+    return result;
+  }
+
+  async deleteOperatorDocument(id: number): Promise<void> {
+    await db.delete(operatorDocuments).where(eq(operatorDocuments.id, id));
   }
 }
 

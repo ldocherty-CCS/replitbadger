@@ -12,13 +12,16 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown, MapPinOff, Calendar, Clock } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown, MapPinOff, Calendar, Clock, Upload, FileText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getOperatorColor, getOperatorTypeLabel } from "@/lib/operator-colors";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { format, parseISO, isPast, isWithinInterval, isFuture } from "date-fns";
+import { useUpload } from "@/hooks/use-upload";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import {
   Select,
   SelectContent,
@@ -48,6 +51,7 @@ export default function Operators() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOp, setEditingOp] = useState<any>(null);
   const [availabilityOp, setAvailabilityOp] = useState<any>(null);
+  const [documentsOp, setDocumentsOp] = useState<any>(null);
 
   const filteredOperators = operators?.filter(op => 
     op.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -106,6 +110,9 @@ export default function Operators() {
                   </div>
                 </div>
                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => setDocumentsOp(op)} data-testid={`button-documents-${op.id}`}>
+                    <FileText className="w-4 h-4 text-muted-foreground" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => { setEditingOp(op); setIsDialogOpen(true); }} data-testid={`button-edit-operator-${op.id}`}>
                     <Pencil className="w-4 h-4 text-muted-foreground" />
                   </Button>
@@ -171,7 +178,8 @@ export default function Operators() {
       <OperatorDialog 
         open={isDialogOpen} 
         onOpenChange={setIsDialogOpen} 
-        initialData={editingOp} 
+        initialData={editingOp}
+        operators={operators || []}
       />
 
       {availabilityOp && (
@@ -181,6 +189,12 @@ export default function Operators() {
           operator={availabilityOp}
         />
       )}
+
+      <DocumentsDialog
+        open={!!documentsOp}
+        onOpenChange={(o) => { if (!o) setDocumentsOp(null); }}
+        operator={documentsOp || {}}
+      />
     </div>
   );
 }
@@ -303,7 +317,7 @@ function QualificationMultiSelect({
   );
 }
 
-function OperatorDialog({ open, onOpenChange, initialData }: any) {
+function OperatorDialog({ open, onOpenChange, initialData, operators }: any) {
   const createOp = useCreateOperator();
   const updateOp = useUpdateOperator();
   const isEditing = !!initialData;
@@ -316,6 +330,10 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
   const [truckLocation, setTruckLocation] = useState("");
   const [truckLat, setTruckLat] = useState<string>("");
   const [truckLng, setTruckLng] = useState<string>("");
+  const [groupName, setGroupName] = useState("");
+  const [groupOpen, setGroupOpen] = useState(false);
+
+  const existingGroups: string[] = [...new Set((operators || []).map((op: any) => op.groupName).filter(Boolean))].sort();
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && initialData) {
@@ -327,6 +345,7 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
       setTruckLocation(initialData.truckLocation || "");
       setTruckLat(initialData.truckLat ? String(initialData.truckLat) : "");
       setTruckLng(initialData.truckLng ? String(initialData.truckLng) : "");
+      setGroupName(initialData.groupName || "");
     } else if (isOpen) {
       setSelectedQuals([]);
       setIsOutOfState(false);
@@ -336,16 +355,18 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
       setTruckLocation("");
       setTruckLat("");
       setTruckLng("");
+      setGroupName("");
     }
     onOpenChange(isOpen);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!groupName.trim()) return;
     const formData = new FormData(e.currentTarget);
     const data = {
       name: formData.get("name") as string,
-      groupName: formData.get("groupName") as string,
+      groupName: groupName.trim(),
       phone: formData.get("phone") as string,
       truckLocation: truckLocation,
       truckLat: truckLat ? parseFloat(truckLat) : null,
@@ -381,7 +402,36 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="groupName">Group / Region</Label>
-              <Input id="groupName" name="groupName" defaultValue={initialData?.groupName} required placeholder="e.g. Milwaukee" data-testid="input-operator-group" />
+              <Popover open={groupOpen} onOpenChange={setGroupOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" aria-expanded={groupOpen} className="w-full justify-between font-normal" data-testid="input-operator-group">
+                    {groupName || "Select or type a group..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Search or type new group..." value={groupName} onValueChange={setGroupName} data-testid="input-group-search" />
+                    <CommandList>
+                      <CommandEmpty>
+                        {groupName ? (
+                          <button type="button" className="w-full px-2 py-1.5 text-sm text-left" onClick={() => { setGroupOpen(false); }}>
+                            Use "{groupName}"
+                          </button>
+                        ) : "Type a group name..."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {existingGroups.filter(g => g.toLowerCase().includes(groupName.toLowerCase())).map(group => (
+                          <CommandItem key={group} value={group} onSelect={() => { setGroupName(group); setGroupOpen(false); }}>
+                            <Check className={cn("mr-2 h-4 w-4", groupName === group ? "opacity-100" : "opacity-0")} />
+                            {group}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label>Type</Label>
@@ -649,6 +699,96 @@ function AvailabilityDialog({ open, onOpenChange, operator }: { open: boolean; o
               <Plus className="w-4 h-4 mr-2" />
               Add Availability Window
             </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DocumentsDialog({ open, onOpenChange, operator }: { open: boolean; onOpenChange: (open: boolean) => void; operator: any }) {
+  const [uploadingFileName, setUploadingFileName] = useState("");
+  const [uploadingContentType, setUploadingContentType] = useState("");
+  const [uploadingSize, setUploadingSize] = useState(0);
+
+  const { data: documents, isLoading } = useQuery<any[]>({
+    queryKey: ['/api/operators', operator.id, 'documents'],
+    queryFn: async () => {
+      const res = await fetch(`/api/operators/${operator.id}/documents`);
+      if (!res.ok) throw new Error('Failed to fetch documents');
+      return res.json();
+    },
+    enabled: open && !!operator?.id,
+  });
+
+  const { uploadFile, isUploading, progress } = useUpload({
+    onSuccess: async (response) => {
+      await apiRequest("POST", `/api/operators/${operator.id}/documents`, {
+        name: uploadingFileName,
+        objectPath: response.objectPath,
+        contentType: uploadingContentType,
+        size: uploadingSize,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/operators', operator.id, 'documents'] });
+    },
+  });
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadingFileName(file.name);
+      setUploadingContentType(file.type);
+      setUploadingSize(file.size);
+      await uploadFile(file);
+    }
+  };
+
+  const handleDelete = async (docId: number) => {
+    await apiRequest("DELETE", `/api/operator-documents/${docId}`);
+    queryClient.invalidateQueries({ queryKey: ['/api/operators', operator.id, 'documents'] });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Documents - {operator.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <input type="file" id="doc-upload" className="hidden" onChange={handleFileSelect} disabled={isUploading} />
+            <Button variant="outline" onClick={() => document.getElementById('doc-upload')?.click()} disabled={isUploading} data-testid="button-upload-document">
+              {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+              {isUploading ? `Uploading... ${progress}%` : "Upload Document"}
+            </Button>
+          </div>
+
+          {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+            documents?.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No documents uploaded yet</p>
+            ) : (
+              <div className="space-y-2">
+                {documents?.map((doc: any) => (
+                  <div key={doc.id} className="flex items-center justify-between gap-2 p-2 border rounded-md" data-testid={`doc-row-${doc.id}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <a href={doc.objectPath} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-primary hover:underline truncate block">
+                          {doc.name}
+                        </a>
+                        <span className="text-xs text-muted-foreground">
+                          {doc.size ? `${(doc.size / 1024).toFixed(1)} KB` : ''}
+                          {doc.createdAt ? ` · ${format(new Date(doc.createdAt), 'MMM d, yyyy')}` : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)} data-testid={`button-delete-doc-${doc.id}`}>
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
       </DialogContent>

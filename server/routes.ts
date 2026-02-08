@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
   const key = process.env.GOOGLE_MAPS_API_KEY;
@@ -30,6 +31,7 @@ export async function registerRoutes(
   // Auth Setup
   await setupAuth(app);
   registerAuthRoutes(app);
+  registerObjectStorageRoutes(app);
 
   // === Config (expose API keys for frontend) ===
   app.get("/api/config/maps-key", (req, res) => {
@@ -528,6 +530,41 @@ export async function registerRoutes(
       console.error("Geocode backfill error:", error);
       res.status(500).json({ message: "Geocode backfill failed" });
     }
+  });
+
+  // === Operator Documents ===
+  app.get("/api/operators/:id/documents", async (req, res) => {
+    const docs = await storage.getOperatorDocuments(Number(req.params.id));
+    res.json(docs);
+  });
+
+  app.post("/api/operators/:id/documents", async (req, res) => {
+    try {
+      const input = z.object({
+        name: z.string(),
+        objectPath: z.string(),
+        contentType: z.string().optional(),
+        size: z.number().optional(),
+      }).parse(req.body);
+      const doc = await storage.createOperatorDocument({
+        operatorId: Number(req.params.id),
+        name: input.name,
+        objectPath: input.objectPath,
+        contentType: input.contentType || null,
+        size: input.size || null,
+      });
+      res.status(201).json(doc);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create document" });
+    }
+  });
+
+  app.delete("/api/operator-documents/:id", async (req, res) => {
+    await storage.deleteOperatorDocument(Number(req.params.id));
+    res.status(204).send();
   });
 
   // Seed Data
