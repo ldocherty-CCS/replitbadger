@@ -5,6 +5,24 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key || !address || address.trim().length === 0) return null;
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${key}`;
+    const response = await fetch(url);
+    const data = await response.json() as any;
+    if (data.status === "OK" && data.results?.[0]?.geometry?.location) {
+      const loc = data.results[0].geometry.location;
+      return { lat: loc.lat, lng: loc.lng };
+    }
+    return null;
+  } catch (error) {
+    console.error("Geocoding error:", error);
+    return null;
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -193,7 +211,15 @@ export async function registerRoutes(
     try {
       const input = api.jobs.create.input.parse(req.body);
       const userId = (req.user as any)?.claims?.sub || null;
-      const job = await storage.createJob({ ...input, createdBy: userId });
+      let jobData: any = { ...input, createdBy: userId };
+      if ((!jobData.lat || !jobData.lng) && jobData.address) {
+        const coords = await geocodeAddress(jobData.address);
+        if (coords) {
+          jobData.lat = coords.lat;
+          jobData.lng = coords.lng;
+        }
+      }
+      const job = await storage.createJob(jobData);
       res.status(201).json(job);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -206,7 +232,15 @@ export async function registerRoutes(
   app.put(api.jobs.update.path, async (req, res) => {
     try {
       const input = api.jobs.update.input.parse(req.body);
-      const job = await storage.updateJob(Number(req.params.id), input);
+      let updateData: any = { ...input };
+      if (updateData.address && (!updateData.lat || !updateData.lng)) {
+        const coords = await geocodeAddress(updateData.address);
+        if (coords) {
+          updateData.lat = coords.lat;
+          updateData.lng = coords.lng;
+        }
+      }
+      const job = await storage.updateJob(Number(req.params.id), updateData);
       res.json(job);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -425,10 +459,22 @@ export async function registerRoutes(
       const userId = (req.user as any)?.claims?.sub || null;
       const created: any[] = [];
 
+      let jobLat = input.job.lat;
+      let jobLng = input.job.lng;
+      if ((!jobLat || !jobLng) && input.job.address) {
+        const coords = await geocodeAddress(input.job.address);
+        if (coords) {
+          jobLat = coords.lat;
+          jobLng = coords.lng;
+        }
+      }
+
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split("T")[0];
         const job = await storage.createJob({
           ...input.job,
+          lat: jobLat,
+          lng: jobLng,
           scope: input.job.scope || "",
           startTime: input.job.startTime || "08:00 AM",
           address: input.job.address || "",
@@ -445,6 +491,28 @@ export async function registerRoutes(
         return res.status(400).json({ message: err.errors[0].message });
       }
       res.status(500).json({ message: "Failed to create job series" });
+    }
+  });
+
+  // === Geocode Backfill (geocode existing jobs without coordinates) ===
+  app.post("/api/jobs/geocode-backfill", async (req, res) => {
+    try {
+      const allJobs = await storage.getJobs({});
+      const jobsToGeocode = allJobs.filter(
+        (j: any) => j.address && j.address.trim().length > 0 && (j.lat == null || j.lng == null)
+      );
+      let geocoded = 0;
+      for (const job of jobsToGeocode) {
+        const coords = await geocodeAddress(job.address);
+        if (coords) {
+          await storage.updateJob(job.id, { lat: coords.lat, lng: coords.lng });
+          geocoded++;
+        }
+      }
+      res.json({ total: jobsToGeocode.length, geocoded });
+    } catch (error) {
+      console.error("Geocode backfill error:", error);
+      res.status(500).json({ message: "Geocode backfill failed" });
     }
   });
 

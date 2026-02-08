@@ -1,17 +1,24 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useJobs } from "@/hooks/use-jobs";
 import { useOperators } from "@/hooks/use-operators";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, MapPin, Calendar, ChevronLeft, ChevronRight, Filter } from "lucide-react";
-import { format, addDays, startOfWeek, parseISO, isWithinInterval } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2, MapPin, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { format, addDays, startOfWeek, parseISO, addWeeks } from "date-fns";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { Job, Operator } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 function escapeHtml(str: string): string {
   const div = document.createElement("div");
@@ -19,15 +26,19 @@ function escapeHtml(str: string): string {
   return div.innerHTML;
 }
 
-const STATUS_COLORS: Record<string, { bg: string; label: string; hex: string }> = {
-  dispatched: { bg: "bg-green-500", label: "Dispatched", hex: "#22c55e" },
-  off: { bg: "bg-red-500", label: "Off", hex: "#ef4444" },
-  ready: { bg: "bg-blue-800", label: "Ready", hex: "#1e40af" },
-  ticket_created: { bg: "bg-sky-400", label: "Ticket Created", hex: "#38bdf8" },
-  existing: { bg: "bg-gray-400", label: "Existing", hex: "#9ca3af" },
-  missing_info: { bg: "bg-pink-400", label: "Missing Info", hex: "#f472b6" },
-  not_qualified: { bg: "bg-orange-400", label: "Not Qualified", hex: "#fb923c" },
+const STATUS_COLORS: Record<string, { label: string; hex: string }> = {
+  dispatched: { label: "Dispatched", hex: "#22c55e" },
+  ready: { label: "Ready", hex: "#1e40af" },
+  ticket_created: { label: "Ticket Created", hex: "#38bdf8" },
+  existing: { label: "Existing", hex: "#9ca3af" },
+  missing_info: { label: "Missing Info", hex: "#f472b6" },
+  not_qualified: { label: "Not Qualified", hex: "#fb923c" },
+  cancelled: { label: "Cancelled", hex: "#6b7280" },
+  standby: { label: "Standby", hex: "#a855f7" },
+  unavailable: { label: "Unavailable", hex: "#ef4444" },
 };
+
+const DAY_ABBREVS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const DAY_COLORS: Record<number, string> = {
   0: "#3b82f6",
@@ -39,9 +50,36 @@ const DAY_COLORS: Record<number, string> = {
   6: "#ec4899",
 };
 
-const DEFAULT_CENTER: [number, number] = [43.0389, -87.9065]; // Milwaukee, WI
+const DEFAULT_CENTER: [number, number] = [43.0389, -87.9065];
 
-function createMarkerIcon(color: string) {
+function createDayMarkerIcon(statusColor: string, dayAbbrev: string, dayColor: string) {
+  return L.divIcon({
+    className: "custom-marker",
+    html: `<div style="position: relative; width: 32px; height: 32px;">
+      <div style="
+        width: 32px; height: 32px; 
+        background: ${statusColor}; 
+        border: 3px solid white; 
+        border-radius: 50%; 
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+      "></div>
+      <div style="
+        position: absolute; top: -10px; right: -10px;
+        background: ${dayColor}; color: white;
+        font-size: 9px; font-weight: 700;
+        padding: 1px 4px; border-radius: 6px;
+        line-height: 14px; white-space: nowrap;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        border: 1px solid white;
+      ">${dayAbbrev}</div>
+    </div>`,
+    iconSize: [42, 42],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16],
+  });
+}
+
+function createSimpleMarkerIcon(color: string) {
   return L.divIcon({
     className: "custom-marker",
     html: `<div style="
@@ -58,25 +96,56 @@ function createMarkerIcon(color: string) {
 }
 
 export default function MapView() {
-  const [filterMode, setFilterMode] = useState<"day" | "range">("day");
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [rangeStart, setRangeStart] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
-  const [rangeEnd, setRangeEnd] = useState(format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 6), "yyyy-MM-dd"));
-  const [colorBy, setColorBy] = useState<"status" | "day">("status");
+  const monday = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const friday = format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), "yyyy-MM-dd");
+
+  const [rangeStart, setRangeStart] = useState(monday);
+  const [rangeEnd, setRangeEnd] = useState(friday);
+  const [hideDispatched, setHideDispatched] = useState(true);
+  const [seriesFilter, setSeriesFilter] = useState<string>("all");
+  const [isBackfilling, setIsBackfilling] = useState(false);
+  const { toast } = useToast();
 
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
 
   const queryFilters = useMemo(() => {
-    if (filterMode === "day") {
-      return { startDate: selectedDate, endDate: selectedDate };
-    }
     return { startDate: rangeStart, endDate: rangeEnd };
-  }, [filterMode, selectedDate, rangeStart, rangeEnd]);
+  }, [rangeStart, rangeEnd]);
 
-  const { data: jobs, isLoading: jobsLoading } = useJobs(queryFilters);
-  const { data: operators } = useOperators();
+  const { data: jobs, isLoading: jobsLoading, refetch } = useJobs(queryFilters);
+
+  const filteredJobs = useMemo(() => {
+    if (!jobs) return [];
+    let result = jobs as any[];
+    if (hideDispatched) {
+      result = result.filter((j) => j.status !== "dispatched");
+    }
+    if (seriesFilter && seriesFilter !== "all") {
+      result = result.filter((j) => j.seriesId === seriesFilter);
+    }
+    return result;
+  }, [jobs, hideDispatched, seriesFilter]);
+
+  const seriesOptions = useMemo(() => {
+    if (!jobs) return [];
+    const seriesMap = new Map<string, { id: string; label: string; count: number }>();
+    (jobs as any[]).forEach((j) => {
+      if (j.seriesId) {
+        if (!seriesMap.has(j.seriesId)) {
+          const customerName = j.customer?.name || "Unknown";
+          seriesMap.set(j.seriesId, {
+            id: j.seriesId,
+            label: `${customerName} - ${j.scope?.substring(0, 30) || "No scope"}`,
+            count: 0,
+          });
+        }
+        seriesMap.get(j.seriesId)!.count++;
+      }
+    });
+    return Array.from(seriesMap.values());
+  }, [jobs]);
 
   useEffect(() => {
     if (!mapRef.current || leafletMap.current) return;
@@ -102,12 +171,14 @@ export default function MapView() {
     };
   }, []);
 
+  const isMultiDay = rangeStart !== rangeEnd;
+
   useEffect(() => {
-    if (!leafletMap.current || !markersLayer.current || !jobs) return;
+    if (!leafletMap.current || !markersLayer.current) return;
 
     markersLayer.current.clearLayers();
 
-    const jobsWithLocation = jobs.filter(
+    const jobsWithLocation = filteredJobs.filter(
       (j: any) => j.lat != null && j.lng != null
     );
 
@@ -120,43 +191,47 @@ export default function MapView() {
       const lng = job.lng!;
       bounds.extend([lat, lng]);
 
-      let markerColor = "#9ca3af";
-      if (colorBy === "status") {
-        markerColor = STATUS_COLORS[job.status]?.hex || "#9ca3af";
-      } else {
-        const jobDate = parseISO(job.scheduledDate);
-        const dayOfWeek = jobDate.getDay();
-        markerColor = DAY_COLORS[dayOfWeek] || "#9ca3af";
-      }
+      const statusColor = STATUS_COLORS[job.status]?.hex || "#9ca3af";
+      const jobDate = parseISO(job.scheduledDate);
+      const dayOfWeek = jobDate.getDay();
+      const dayAbbrev = DAY_ABBREVS[dayOfWeek];
+      const dayColor = DAY_COLORS[dayOfWeek] || "#9ca3af";
 
-      const icon = createMarkerIcon(markerColor);
+      const icon = isMultiDay
+        ? createDayMarkerIcon(statusColor, dayAbbrev, dayColor)
+        : createSimpleMarkerIcon(statusColor);
+
       const operatorName = escapeHtml(job.operator?.name || "Unassigned");
       const customerName = escapeHtml(job.customer?.name || "Unknown");
       const scopeText = escapeHtml(job.scope || "");
       const addressText = escapeHtml(job.address || "");
       const startTimeText = escapeHtml(job.startTime || "");
       const statusLabel = STATUS_COLORS[job.status]?.label || job.status;
+      const dateLabel = format(jobDate, "EEE, MMM d");
+      const seriesLabel = job.seriesId ? `<div style="font-size: 11px; color: #888; margin-top: 4px;">Series job</div>` : "";
 
       const popup = L.popup().setContent(`
-        <div style="min-width: 200px; font-family: system-ui, sans-serif;">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 6px;">${customerName}</div>
+        <div style="min-width: 220px; font-family: system-ui, sans-serif;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <span style="
+              display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+              background: ${dayColor}; flex-shrink: 0;
+            "></span>
+            <span style="font-weight: 600; font-size: 13px; color: ${dayColor};">${dateLabel}</span>
+          </div>
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">${customerName}</div>
           <div style="font-size: 12px; color: #666; margin-bottom: 4px;">${scopeText}</div>
           <hr style="margin: 6px 0; border-color: #eee;" />
           <div style="font-size: 12px;"><strong>Operator:</strong> ${operatorName}</div>
-          <div style="font-size: 12px;"><strong>Date:</strong> ${format(parseISO(job.scheduledDate), "MMM d, yyyy")}</div>
           <div style="font-size: 12px;"><strong>Time:</strong> ${startTimeText}</div>
           <div style="font-size: 12px;"><strong>Status:</strong> 
             <span style="
-              display: inline-block; 
-              padding: 1px 8px; 
-              border-radius: 9999px; 
-              font-size: 11px; 
-              background: ${markerColor}20; 
-              color: ${markerColor};
-              font-weight: 600;
+              display: inline-block; padding: 1px 8px; border-radius: 9999px; 
+              font-size: 11px; background: ${statusColor}20; color: ${statusColor}; font-weight: 600;
             ">${escapeHtml(statusLabel)}</span>
           </div>
           <div style="font-size: 12px; margin-top: 4px; color: #888;">${addressText}</div>
+          ${seriesLabel}
         </div>
       `);
 
@@ -166,17 +241,46 @@ export default function MapView() {
     if (bounds.isValid()) {
       leafletMap.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
     }
-  }, [jobs, colorBy]);
+  }, [filteredJobs, isMultiDay]);
 
-  const navigateDay = (direction: number) => {
-    const current = parseISO(selectedDate);
-    const next = addDays(current, direction);
-    setSelectedDate(format(next, "yyyy-MM-dd"));
+  const navigateWeek = (direction: number) => {
+    const start = parseISO(rangeStart);
+    const newStart = addWeeks(start, direction);
+    setRangeStart(format(newStart, "yyyy-MM-dd"));
+    setRangeEnd(format(addDays(newStart, 4), "yyyy-MM-dd"));
   };
 
-  const totalJobs = jobs?.length || 0;
-  const jobsWithCoords = jobs?.filter((j: any) => j.lat != null && j.lng != null).length || 0;
+  const handleBackfill = async () => {
+    setIsBackfilling(true);
+    try {
+      const res = await apiRequest("POST", "/api/jobs/geocode-backfill");
+      const data = await res.json();
+      toast({
+        title: "Geocoding Complete",
+        description: `Geocoded ${data.geocoded} of ${data.total} jobs missing coordinates`,
+      });
+      refetch();
+    } catch {
+      toast({ title: "Error", description: "Failed to geocode jobs", variant: "destructive" });
+    } finally {
+      setIsBackfilling(false);
+    }
+  };
+
+  const totalJobs = filteredJobs.length;
+  const jobsWithCoords = filteredJobs.filter((j: any) => j.lat != null && j.lng != null).length;
   const jobsWithoutCoords = totalJobs - jobsWithCoords;
+
+  const dayBreakdown = useMemo(() => {
+    const counts: Record<number, number> = {};
+    filteredJobs.forEach((j: any) => {
+      if (j.lat != null && j.lng != null) {
+        const day = parseISO(j.scheduledDate).getDay();
+        counts[day] = (counts[day] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [filteredJobs]);
 
   return (
     <div className="h-[calc(100vh-65px)] flex flex-col">
@@ -187,79 +291,79 @@ export default function MapView() {
             <h1 className="text-lg font-bold" data-testid="text-map-title">Job Map</h1>
           </div>
 
-          <Tabs value={filterMode} onValueChange={(v) => setFilterMode(v as "day" | "range")} className="ml-auto">
-            <TabsList>
-              <TabsTrigger value="day" data-testid="tab-filter-day">Single Day</TabsTrigger>
-              <TabsTrigger value="range" data-testid="tab-filter-range">Date Range</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {filterMode === "day" && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => navigateDay(-1)} data-testid="button-prev-day">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-40"
-                data-testid="input-selected-date"
-              />
-              <Button variant="outline" size="icon" onClick={() => navigateDay(1)} data-testid="button-next-day">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedDate(format(new Date(), "yyyy-MM-dd"))}
-                data-testid="button-today"
-              >
-                Today
-              </Button>
-            </div>
-          )}
-
-          {filterMode === "range" && (
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-muted-foreground">From</Label>
-              <Input
-                type="date"
-                value={rangeStart}
-                onChange={(e) => setRangeStart(e.target.value)}
-                className="w-40"
-                data-testid="input-range-start"
-              />
-              <Label className="text-sm text-muted-foreground">To</Label>
-              <Input
-                type="date"
-                value={rangeEnd}
-                onChange={(e) => setRangeEnd(e.target.value)}
-                className="w-40"
-                data-testid="input-range-end"
-              />
-            </div>
-          )}
-
           <div className="flex items-center gap-2">
-            <Label className="text-xs text-muted-foreground">Color by:</Label>
-            <Button
-              variant={colorBy === "status" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setColorBy("status")}
-              data-testid="button-color-status"
-            >
-              Status
+            <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)} data-testid="button-prev-week">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Input
+              type="date"
+              value={rangeStart}
+              onChange={(e) => setRangeStart(e.target.value)}
+              className="w-40"
+              data-testid="input-range-start"
+            />
+            <Label className="text-sm text-muted-foreground">to</Label>
+            <Input
+              type="date"
+              value={rangeEnd}
+              onChange={(e) => setRangeEnd(e.target.value)}
+              className="w-40"
+              data-testid="input-range-end"
+            />
+            <Button variant="outline" size="icon" onClick={() => navigateWeek(1)} data-testid="button-next-week">
+              <ChevronRight className="h-4 w-4" />
             </Button>
             <Button
-              variant={colorBy === "day" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setColorBy("day")}
-              data-testid="button-color-day"
+              variant="ghost"
+              onClick={() => {
+                setRangeStart(monday);
+                setRangeEnd(friday);
+              }}
+              data-testid="button-this-week"
             >
-              Day
+              This Week
             </Button>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="hide-dispatched"
+              checked={hideDispatched}
+              onCheckedChange={(v) => setHideDispatched(!!v)}
+              data-testid="checkbox-hide-dispatched"
+            />
+            <Label htmlFor="hide-dispatched" className="text-sm cursor-pointer">
+              Hide Dispatched
+            </Label>
+          </div>
+
+          {seriesOptions.length > 0 && (
+            <Select value={seriesFilter} onValueChange={setSeriesFilter}>
+              <SelectTrigger className="w-56" data-testid="select-series-filter">
+                <SelectValue placeholder="Filter by series" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Jobs</SelectItem>
+                {seriesOptions.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.label} ({s.count})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {jobsWithoutCoords > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleBackfill}
+              disabled={isBackfilling}
+              data-testid="button-geocode-backfill"
+            >
+              {isBackfilling ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Geocode {jobsWithoutCoords} job{jobsWithoutCoords !== 1 ? "s" : ""}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -273,46 +377,49 @@ export default function MapView() {
         <div ref={mapRef} className="h-full w-full" data-testid="map-container" />
 
         <div className="absolute bottom-4 left-4 z-[1000]">
-          <Card className="w-64">
+          <Card className="w-72">
             <CardContent className="p-3">
               <div className="text-sm font-medium mb-2" data-testid="text-job-summary">
-                {totalJobs} job{totalJobs !== 1 ? "s" : ""} found
-                {jobsWithoutCoords > 0 && (
-                  <span className="text-muted-foreground ml-1">
-                    ({jobsWithoutCoords} without location)
-                  </span>
+                {jobsWithCoords} of {totalJobs} job{totalJobs !== 1 ? "s" : ""} on map
+                {hideDispatched && (
+                  <span className="text-muted-foreground ml-1">(dispatched hidden)</span>
                 )}
               </div>
 
-              {colorBy === "status" && (
-                <div className="space-y-1">
-                  {Object.entries(STATUS_COLORS).map(([key, val]) => {
-                    const count = jobs?.filter((j: any) => j.status === key).length || 0;
-                    if (count === 0) return null;
-                    return (
-                      <div key={key} className="flex items-center gap-2 text-xs">
-                        <div className={`w-3 h-3 rounded-full ${val.bg}`} />
-                        <span className="text-muted-foreground">{val.label}</span>
-                        <span className="ml-auto font-medium">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+              {isMultiDay && (
+                <>
+                  <div className="text-xs text-muted-foreground mb-1.5 font-medium">Jobs by day:</div>
+                  <div className="space-y-0.5 mb-2">
+                    {Object.entries(dayBreakdown)
+                      .sort(([a], [b]) => Number(a) - Number(b))
+                      .map(([dayNum, count]) => (
+                        <div key={dayNum} className="flex items-center gap-2 text-xs">
+                          <div
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ background: DAY_COLORS[Number(dayNum)] }}
+                          />
+                          <span className="text-muted-foreground">{DAY_ABBREVS[Number(dayNum)]}</span>
+                          <span className="ml-auto font-medium">{count}</span>
+                        </div>
+                      ))}
+                  </div>
+                </>
               )}
 
-              {colorBy === "day" && filterMode === "range" && (
-                <div className="space-y-1">
-                  {Object.entries(DAY_COLORS).map(([dayNum, color]) => {
-                    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                    return (
-                      <div key={dayNum} className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-full" style={{ background: color }} />
-                        <span className="text-muted-foreground">{dayNames[Number(dayNum)]}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="text-xs text-muted-foreground mb-1.5 font-medium">Status legend:</div>
+              <div className="space-y-0.5">
+                {Object.entries(STATUS_COLORS).map(([key, val]) => {
+                  const count = filteredJobs.filter((j: any) => j.status === key && j.lat != null && j.lng != null).length;
+                  if (count === 0) return null;
+                  return (
+                    <div key={key} className="flex items-center gap-2 text-xs">
+                      <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: val.hex }} />
+                      <span className="text-muted-foreground">{val.label}</span>
+                      <span className="ml-auto font-medium">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         </div>

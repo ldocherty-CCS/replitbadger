@@ -83,6 +83,8 @@ export function CreateJobDialog({
   const { toast } = useToast();
   const [isMultiDay, setIsMultiDay] = useState(false);
   const [endDate, setEndDate] = useState("");
+  const [jobLat, setJobLat] = useState<number | null>(null);
+  const [jobLng, setJobLng] = useState<number | null>(null);
 
   const isEditing = !!initialData;
 
@@ -129,6 +131,8 @@ export function CreateJobDialog({
       } as any);
       setIsMultiDay(false);
       setEndDate("");
+      setJobLat((initialData as any)?.lat ?? null);
+      setJobLng((initialData as any)?.lng ?? null);
     } else {
       form.reset({
         customerId: 0,
@@ -152,6 +156,8 @@ export function CreateJobDialog({
       });
       setIsMultiDay(false);
       setEndDate("");
+      setJobLat(null);
+      setJobLng(null);
     }
   }, [initialData, defaultDate, defaultOperatorId, defaultStatus, form]);
 
@@ -215,17 +221,18 @@ export function CreateJobDialog({
       values.remoteHoseLength = "";
       values.remoteHoseOperatorId = null;
     }
+    const valuesWithCoords = { ...values, lat: jobLat, lng: jobLng };
     try {
       if (isEditing && initialData) {
-        await updateJob.mutateAsync({ id: initialData.id, ...values });
+        await updateJob.mutateAsync({ id: initialData.id, ...valuesWithCoords });
       } else if (isMultiDay && endDate && endDate > values.scheduledDate) {
         await createJobSeries.mutateAsync({
-          job: values,
+          job: valuesWithCoords,
           startDate: values.scheduledDate,
           endDate: endDate,
         });
       } else {
-        await createJob.mutateAsync(values);
+        await createJob.mutateAsync(valuesWithCoords);
       }
       onOpenChange(false);
       form.reset();
@@ -360,6 +367,11 @@ export function CreateJobDialog({
                     <AddressAutocomplete
                       value={field.value}
                       onChange={field.onChange}
+                      onPlaceSelect={(result) => {
+                        field.onChange(result.address);
+                        setJobLat(result.lat);
+                        setJobLng(result.lng);
+                      }}
                       placeholder="Search for job site address..."
                       data-testid="input-job-address"
                     />
