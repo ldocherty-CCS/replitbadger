@@ -102,17 +102,24 @@ function DayCell({
   isOff?: boolean,
 }) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const ctxMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ctxMenu) return;
-    const dismiss = () => setCtxMenu(null);
-    window.addEventListener("click", dismiss);
-    window.addEventListener("contextmenu", dismiss);
-    window.addEventListener("scroll", dismiss, true);
+    const dismiss = (e: MouseEvent) => {
+      if (ctxMenuRef.current && ctxMenuRef.current.contains(e.target as Node)) return;
+      setCtxMenu(null);
+    };
+    const dismissScroll = () => setCtxMenu(null);
+    setTimeout(() => {
+      window.addEventListener("mousedown", dismiss);
+      window.addEventListener("contextmenu", dismiss);
+      window.addEventListener("scroll", dismissScroll, true);
+    }, 0);
     return () => {
-      window.removeEventListener("click", dismiss);
+      window.removeEventListener("mousedown", dismiss);
       window.removeEventListener("contextmenu", dismiss);
-      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("scroll", dismissScroll, true);
     };
   }, [ctxMenu]);
 
@@ -182,6 +189,7 @@ function DayCell({
       </div>
       {ctxMenu && (
         <div
+          ref={ctxMenuRef}
           className="fixed z-50 min-w-[180px] rounded-md border bg-popover p-1 shadow-md"
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           data-testid={`cell-context-menu-${operatorId}-${date}`}
