@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users, Truck, UserCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn, formatOperatorShortName } from "@/lib/utils";
+import { cn, formatOperatorShortName, calculateMileage } from "@/lib/utils";
 import type { Job, Customer, Operator } from "@shared/schema";
 import {
   ContextMenu,
@@ -98,6 +98,14 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
     return required.filter(q => !has.includes(q));
   })();
 
+  const mileage = (() => {
+    const op = job.operator;
+    const jobLat = (job as any).lat;
+    const jobLng = (job as any).lng;
+    if (!op || !op.truckLat || !op.truckLng || !jobLat || !jobLng) return null;
+    return calculateMileage(op.truckLat, op.truckLng, jobLat, jobLng);
+  })();
+
   const innerCard = (
     <Card className={cn(
       "overflow-hidden shadow-sm hover:shadow-md transition-shadow",
@@ -130,6 +138,15 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
             >
               <Truck className="w-2.5 h-2.5" />
               {sameLocationIndex + 1}/{sameLocationTotal}
+            </span>
+          )}
+          {mileage != null && (
+            <span
+              className="shrink-0 text-[9px] font-bold bg-white/25 rounded px-1 py-0.5"
+              title={`~${mileage.toFixed(1)} mi from truck to job site`}
+              data-testid={`badge-mileage-${job.id}`}
+            >
+              {mileage < 1 ? "<1" : Math.round(mileage)} mi
             </span>
           )}
         </div>
