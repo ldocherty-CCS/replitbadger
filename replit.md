@@ -84,10 +84,17 @@ Jobs use a color-coded status system critical for visual hierarchy:
 
 ### Dashboard Features (Desktop)
 - **Schedule Board**: Weekly grid of operators x days with drag-and-drop job assignment
-- **Collapsible Map Panel**: Embedded Leaflet map on the right side of dashboard showing:
-  - **Date Filter**: Day-by-day navigation in map header (defaults to tomorrow). Only jobs for the selected date appear on the map.
+- **Collapsible Map Panel**: Full-featured Google Maps panel on the right side of dashboard (`DashboardMapPanel` component in `client/src/components/DashboardMapPanel.tsx`) showing:
+  - **Date Range Filter**: Start/end date inputs with week navigation (prev/next week, "This Week" button). Defaults to current Mon–Fri.
+  - **Hide Dispatched**: Checkbox to filter out dispatched jobs from the map
+  - **Series Filter**: Dropdown to filter by multi-day job series (when series jobs exist)
+  - **Multi-day Markers**: When date range spans multiple days, markers show day-of-week badges with color coding
+  - **Geocode Backfill**: Button appears when jobs are missing coordinates, triggers batch geocoding
   - Job locations as colored circle markers (color = job status)
   - Operator truck parking locations as square markers with truck icons (color = operator color)
+  - Out-of-state operators show near their most recent job location
+  - **Drive Time**: Click a job marker to see info window with "Calculate drive time from truck" button
+  - **Legend Card**: Bottom-left overlay showing job counts by day (multi-day) and by status
 - **Same-Location Indicator**: When multiple jobs share the same address on the same day, each job card shows a truck icon with "X/Y" (e.g., "1/3") position badge
 - **Off-Day Scheduling Protection**: Dragging a job onto an operator who has the day off is blocked with a warning toast. The Create/Edit Job dialog also shows a red warning banner and prevents submission.
 - **Right-Click Context Menu** on job cards:
