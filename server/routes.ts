@@ -212,7 +212,7 @@ export async function registerRoutes(
       const input = api.jobs.create.input.parse(req.body);
       const userId = (req.user as any)?.claims?.sub || null;
       let jobData: any = { ...input, createdBy: userId };
-      if ((!jobData.lat || !jobData.lng) && jobData.address) {
+      if ((jobData.lat == null || jobData.lng == null) && jobData.address) {
         const coords = await geocodeAddress(jobData.address);
         if (coords) {
           jobData.lat = coords.lat;
@@ -233,7 +233,7 @@ export async function registerRoutes(
     try {
       const input = api.jobs.update.input.parse(req.body);
       let updateData: any = { ...input };
-      if (updateData.address && (!updateData.lat || !updateData.lng)) {
+      if (updateData.address && (updateData.lat == null || updateData.lng == null)) {
         const coords = await geocodeAddress(updateData.address);
         if (coords) {
           updateData.lat = coords.lat;
@@ -461,7 +461,7 @@ export async function registerRoutes(
 
       let jobLat = input.job.lat;
       let jobLng = input.job.lng;
-      if ((!jobLat || !jobLng) && input.job.address) {
+      if ((jobLat == null || jobLng == null) && input.job.address) {
         const coords = await geocodeAddress(input.job.address);
         if (coords) {
           jobLat = coords.lat;
