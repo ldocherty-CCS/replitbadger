@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getOperatorColor, getOperatorTypeLabel } from "@/lib/operator-colors";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   Select,
   SelectContent,
@@ -291,6 +292,9 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
   const [operatorType, setOperatorType] = useState<string>("operator");
   const [availableFrom, setAvailableFrom] = useState("");
   const [availableTo, setAvailableTo] = useState("");
+  const [truckLocation, setTruckLocation] = useState("");
+  const [truckLat, setTruckLat] = useState<string>("");
+  const [truckLng, setTruckLng] = useState<string>("");
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && initialData) {
@@ -299,12 +303,18 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
       setOperatorType(initialData.operatorType || "operator");
       setAvailableFrom(initialData.availableFrom || "");
       setAvailableTo(initialData.availableTo || "");
+      setTruckLocation(initialData.truckLocation || "");
+      setTruckLat(initialData.truckLat ? String(initialData.truckLat) : "");
+      setTruckLng(initialData.truckLng ? String(initialData.truckLng) : "");
     } else if (isOpen) {
       setSelectedQuals([]);
       setIsOutOfState(false);
       setOperatorType("operator");
       setAvailableFrom("");
       setAvailableTo("");
+      setTruckLocation("");
+      setTruckLat("");
+      setTruckLng("");
     }
     onOpenChange(isOpen);
   };
@@ -316,7 +326,9 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
       name: formData.get("name") as string,
       groupName: formData.get("groupName") as string,
       phone: formData.get("phone") as string,
-      truckLocation: formData.get("truckLocation") as string,
+      truckLocation: truckLocation,
+      truckLat: truckLat ? parseFloat(truckLat) : null,
+      truckLng: truckLng ? parseFloat(truckLng) : null,
       operatorType,
       qualifications: selectedQuals,
       isOutOfState,
@@ -369,7 +381,18 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="truckLocation">Truck Park Location</Label>
-            <Input id="truckLocation" name="truckLocation" defaultValue={initialData?.truckLocation} data-testid="input-operator-truck" />
+            <AddressAutocomplete
+              id="truckLocation"
+              value={truckLocation}
+              onChange={setTruckLocation}
+              onPlaceSelect={(result) => {
+                setTruckLocation(result.address);
+                setTruckLat(String(result.lat));
+                setTruckLng(String(result.lng));
+              }}
+              placeholder="Search for truck parking address..."
+              data-testid="input-operator-truck"
+            />
           </div>
           <div className="rounded-md border p-3 space-y-3">
             <div className="flex items-start gap-3">

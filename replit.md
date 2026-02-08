@@ -17,6 +17,7 @@ Preferred communication style: Simple, everyday language.
 - **UI Components**: shadcn/ui (new-york style) built on Radix UI primitives with Tailwind CSS
 - **Drag and Drop**: @dnd-kit/core and @dnd-kit/sortable for the scheduling board's drag-and-drop job assignment
 - **Map**: Leaflet (not Google Maps) for the map view, centered on Milwaukee, WI
+- **Address Autocomplete**: Google Maps Places API for address input fields (operator truck location, job addresses). Reusable `AddressAutocomplete` component in `client/src/components/AddressAutocomplete.tsx`. API key served via `GET /api/config/maps-key`.
 - **Forms**: react-hook-form with zod validation via @hookform/resolvers
 - **Date Handling**: date-fns
 - **Icons**: lucide-react
@@ -49,7 +50,7 @@ Preferred communication style: Simple, everyday language.
 - **User Upsert**: On login, users are upserted into the `users` table via `authStorage.upsertUser()`
 - **Protected Routes**: Frontend uses a `ProtectedRoute` wrapper; backend uses `isAuthenticated` middleware
 - **Login Flow**: Client redirects to `/api/login`, which initiates OIDC flow with Replit
-- **Environment Variables Required**: `DATABASE_URL`, `SESSION_SECRET`, `REPL_ID`, `ISSUER_URL` (defaults to Replit OIDC)
+- **Environment Variables Required**: `DATABASE_URL`, `SESSION_SECRET`, `REPL_ID`, `ISSUER_URL` (defaults to Replit OIDC), `GOOGLE_MAPS_API_KEY` (for address autocomplete)
 
 ### Shared Code (`shared/` directory)
 - `schema.ts` — Drizzle table definitions and Zod insert schemas (shared between client and server)

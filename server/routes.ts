@@ -13,6 +13,13 @@ export async function registerRoutes(
   await setupAuth(app);
   registerAuthRoutes(app);
 
+  // === Config (expose API keys for frontend) ===
+  app.get("/api/config/maps-key", (req, res) => {
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (!key) return res.status(404).json({ message: "Maps API key not configured" });
+    res.json({ key });
+  });
+
   // === Operators ===
   app.get(api.operators.list.path, async (req, res) => {
     const operators = await storage.getOperators();

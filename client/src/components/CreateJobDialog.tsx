@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTimeOff } from "@/hooks/use-time-off";
@@ -274,7 +275,12 @@ export function CreateJobDialog({
                     <FormItem>
                       <FormLabel>Location</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Job site address" />
+                        <AddressAutocomplete
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Search for job site address..."
+                          data-testid="input-job-address"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
