@@ -92,7 +92,7 @@ export function CreateJobDialog({
       customerId: 0,
       scope: "",
       address: "",
-      startTime: "08:00 AM",
+      startTime: "07:00 AM",
       status: defaultStatus || "missing_info",
       scheduledDate: defaultDate || new Date().toISOString().split("T")[0],
       additionalOperatorNeeded: false,
@@ -134,7 +134,7 @@ export function CreateJobDialog({
         customerId: 0,
         scope: "",
         address: "",
-        startTime: "08:00 AM",
+        startTime: "07:00 AM",
         status: defaultStatus || "missing_info",
         scheduledDate: defaultDate || new Date().toISOString().split("T")[0],
         operatorId: defaultOperatorId || undefined,
@@ -471,8 +471,11 @@ export function CreateJobDialog({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={(checked) => {
-                            field.onChange(!!checked);
-                            if (!checked) {
+                            const isChecked = !!checked;
+                            field.onChange(isChecked);
+                            if (isChecked) {
+                              form.setValue("additionalOperatorNeeded", true);
+                            } else {
                               form.setValue("remoteHoseOperatorId", null);
                               form.setValue("remoteHoseLength", "");
                             }
@@ -500,40 +503,6 @@ export function CreateJobDialog({
                   />
                 )}
               </div>
-
-              {watchedRemoteHose && (
-                <FormField
-                  control={form.control}
-                  name="remoteHoseOperatorId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Remote Hose Assistant</FormLabel>
-                      <Select
-                        onValueChange={(val) => field.onChange(val === "none" ? null : val)}
-                        value={field.value ? field.value.toString() : "none"}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-remote-hose-operator">
-                            <SelectValue placeholder="Select assistant for remote hose" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="none">Not assigned yet</SelectItem>
-                          {operators
-                            ?.filter((op) => op.id !== form.watch("operatorId"))
-                            .map((op) => (
-                              <SelectItem key={op.id} value={op.id.toString()}>
-                                {op.name}
-                                {op.operatorType === "local_assistant" ? " (Assistant)" : ""}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
             </div>
 
             {/* Row 7: Water + Dump */}
@@ -544,17 +513,26 @@ export function CreateJobDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Water</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-water">
-                          <SelectValue placeholder="Select water source" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="on_site">On Site</SelectItem>
-                        <SelectItem value="off_site">Off Site</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-0">
+                      <Button
+                        type="button"
+                        variant={field.value === "on_site" ? "default" : "outline"}
+                        className="rounded-r-none flex-1"
+                        onClick={() => field.onChange(field.value === "on_site" ? "" : "on_site")}
+                        data-testid="toggle-water-onsite"
+                      >
+                        On Site
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={field.value === "off_site" ? "default" : "outline"}
+                        className="rounded-l-none flex-1 border-l-0"
+                        onClick={() => field.onChange(field.value === "off_site" ? "" : "off_site")}
+                        data-testid="toggle-water-offsite"
+                      >
+                        Off Site
+                      </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -566,17 +544,26 @@ export function CreateJobDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Dump</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-dump">
-                          <SelectValue placeholder="Select dump location" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="on_site">On Site</SelectItem>
-                        <SelectItem value="off_site">Off Site</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-0">
+                      <Button
+                        type="button"
+                        variant={field.value === "on_site" ? "default" : "outline"}
+                        className="rounded-r-none flex-1"
+                        onClick={() => field.onChange(field.value === "on_site" ? "" : "on_site")}
+                        data-testid="toggle-dump-onsite"
+                      >
+                        On Site
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={field.value === "off_site" ? "default" : "outline"}
+                        className="rounded-l-none flex-1 border-l-0"
+                        onClick={() => field.onChange(field.value === "off_site" ? "" : "off_site")}
+                        data-testid="toggle-dump-offsite"
+                      >
+                        Off Site
+                      </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

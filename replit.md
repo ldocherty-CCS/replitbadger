@@ -76,6 +76,12 @@ Jobs use a color-coded status system critical for visual hierarchy:
 - **Off-Day Display**: Days off shown with red background and "OFF" label
 - **Component**: `MobileCalendarView` in `client/src/components/MobileCalendarView.tsx`
 
+### Operator Sorting & Capacity
+- **Sorting**: Within each group, regular Operators appear before Assistant Operators, each sub-sorted by last name ascending
+- **Capacity Chart**: Only counts truck operators (excludes assistants) for totalTrucks, booked, offCount, effectiveTrucks
+- **Map Markers**: Assistant operators are excluded from truck parking markers on the map
+- **Truck Location**: Assistant operators don't have a truck park location field in the operator form
+
 ### Dashboard Features (Desktop)
 - **Schedule Board**: Weekly grid of operators x days with drag-and-drop job assignment
 - **Collapsible Map Panel**: Embedded Leaflet map on the right side of dashboard showing:

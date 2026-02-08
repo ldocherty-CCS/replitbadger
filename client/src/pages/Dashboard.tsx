@@ -261,13 +261,15 @@ function AvailabilityChart({
   operators: Operator[] | undefined;
   operatorOffDays?: Set<string>;
 }) {
-  const totalTrucks = operators?.length || 0;
+  const truckOperators = operators?.filter(op => op.operatorType !== "assistant") || [];
+  const totalTrucks = truckOperators.length;
 
   const dayStats = weekDays.map((day) => {
     const dayJobs = jobs?.filter((j) => j.scheduledDate === day.iso && j.status !== "cancelled" && j.status !== "standby") || [];
-    const uniqueOperatorsBooked = new Set(dayJobs.map((j) => j.operatorId).filter(Boolean));
+    const truckOperatorIds = new Set(truckOperators.map(op => op.id));
+    const uniqueOperatorsBooked = new Set(dayJobs.map((j) => j.operatorId).filter((id): id is number => id != null && truckOperatorIds.has(id)));
     const booked = uniqueOperatorsBooked.size;
-    const offCount = operators?.filter(op => operatorOffDays?.has(`${op.id}-${day.iso}`)).length || 0;
+    const offCount = truckOperators.filter(op => operatorOffDays?.has(`${op.id}-${day.iso}`)).length;
     const effectiveTrucks = totalTrucks - offCount;
     const available = Math.max(0, effectiveTrucks - booked);
     const overbooked = booked > effectiveTrucks;
@@ -392,7 +394,19 @@ function DesktopDashboard() {
     endDate: weekDays[6].iso,
   });
 
-  const { data: operators, isLoading: opsLoading } = useOperators();
+  const { data: rawOperators, isLoading: opsLoading } = useOperators();
+  const operators = useMemo(() => {
+    if (!rawOperators) return rawOperators;
+    return [...rawOperators].sort((a, b) => {
+      if (a.groupName !== b.groupName) return a.groupName.localeCompare(b.groupName);
+      const typeA = a.operatorType === "assistant" ? 1 : 0;
+      const typeB = b.operatorType === "assistant" ? 1 : 0;
+      if (typeA !== typeB) return typeA - typeB;
+      const lastA = a.name.trim().split(/\s+/).pop()?.toLowerCase() || "";
+      const lastB = b.name.trim().split(/\s+/).pop()?.toLowerCase() || "";
+      return lastA.localeCompare(lastB);
+    });
+  }, [rawOperators]);
   const { data: timeOffRecords } = useTimeOff({
     startDate: weekDays[0].iso,
     endDate: weekDays[6].iso,
@@ -660,7 +674,7 @@ function DesktopDashboard() {
   }, [jobs, mapDate]);
 
   const mapJobsWithCoords = mapFilteredJobs.filter((j: any) => j.lat != null && j.lng != null).length;
-  const mapTruckMarkers = operators?.filter((op: any) => op.truckLat != null && op.truckLng != null).length || 0;
+  const mapTruckMarkers = operators?.filter((op: any) => op.operatorType !== "assistant" && op.truckLat != null && op.truckLng != null).length || 0;
 
   useEffect(() => {
     if (!googleMap.current) return;
@@ -672,7 +686,7 @@ function DesktopDashboard() {
     let hasPoints = false;
 
     if (operators) {
-      operators.forEach((op: any) => {
+      operators.filter((op: any) => op.operatorType !== "assistant").forEach((op: any) => {
         let markerLat = op.truckLat;
         let markerLng = op.truckLng;
         let locationLabel = op.truckLocation || "Unknown";

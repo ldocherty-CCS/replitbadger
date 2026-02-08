@@ -249,7 +249,8 @@ export function MobileCalendarView() {
   }, [jobs]);
 
   const dayStats = useMemo(() => {
-    const totalTrucks = operators?.length || 0;
+    const truckOperators = operators?.filter(op => op.operatorType !== "assistant") || [];
+    const totalTrucks = truckOperators.length;
     return weekDays.map((day) => {
       const dayJobs = jobs?.filter(
         (j) =>
@@ -257,11 +258,10 @@ export function MobileCalendarView() {
           j.status !== "cancelled" &&
           j.status !== "standby"
       ) || [];
-      const uniqueOps = new Set(dayJobs.map((j) => j.operatorId).filter(Boolean));
+      const truckOperatorIds = new Set(truckOperators.map(op => op.id));
+      const uniqueOps = new Set(dayJobs.map((j) => j.operatorId).filter((id): id is number => id != null && truckOperatorIds.has(id)));
       const booked = uniqueOps.size;
-      const offCount =
-        operators?.filter((op) => operatorOffDays.has(`${op.id}-${day.iso}`))
-          .length || 0;
+      const offCount = truckOperators.filter(op => operatorOffDays.has(`${op.id}-${day.iso}`)).length;
       const effective = totalTrucks - offCount;
       const available = Math.max(0, effective - booked);
       const overbooked = booked > effective;
@@ -276,7 +276,12 @@ export function MobileCalendarView() {
     if (!operators) return [];
     const sorted = operators.slice().sort((a, b) => {
       if (a.groupName !== b.groupName) return (a.groupName || "").localeCompare(b.groupName || "");
-      return a.name.localeCompare(b.name);
+      const typeA = a.operatorType === "assistant" ? 1 : 0;
+      const typeB = b.operatorType === "assistant" ? 1 : 0;
+      if (typeA !== typeB) return typeA - typeB;
+      const lastA = a.name.trim().split(/\s+/).pop()?.toLowerCase() || "";
+      const lastB = b.name.trim().split(/\s+/).pop()?.toLowerCase() || "";
+      return lastA.localeCompare(lastB);
     });
     const groups: { name: string; operators: Operator[] }[] = [];
     let currentGroup = "";

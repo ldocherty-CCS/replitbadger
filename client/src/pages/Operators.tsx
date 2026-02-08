@@ -400,21 +400,23 @@ function OperatorDialog({ open, onOpenChange, initialData }: any) {
             <Label htmlFor="phone">Phone Number</Label>
             <Input id="phone" name="phone" defaultValue={initialData?.phone} placeholder="(555) 123-4567" data-testid="input-operator-phone" />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="truckLocation">Truck Park Location</Label>
-            <AddressAutocomplete
-              id="truckLocation"
-              value={truckLocation}
-              onChange={setTruckLocation}
-              onPlaceSelect={(result) => {
-                setTruckLocation(result.address);
-                setTruckLat(String(result.lat));
-                setTruckLng(String(result.lng));
-              }}
-              placeholder="Search for truck parking address..."
-              data-testid="input-operator-truck"
-            />
-          </div>
+          {operatorType !== "assistant" && (
+            <div className="space-y-2">
+              <Label htmlFor="truckLocation">Truck Park Location</Label>
+              <AddressAutocomplete
+                id="truckLocation"
+                value={truckLocation}
+                onChange={setTruckLocation}
+                onPlaceSelect={(result) => {
+                  setTruckLocation(result.address);
+                  setTruckLat(String(result.lat));
+                  setTruckLng(String(result.lng));
+                }}
+                placeholder="Search for truck parking address..."
+                data-testid="input-operator-truck"
+              />
+            </div>
+          )}
           <div className="rounded-md border p-3 space-y-3">
             <div className="flex items-start gap-3">
               <Checkbox
