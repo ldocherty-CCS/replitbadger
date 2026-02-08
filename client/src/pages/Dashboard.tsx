@@ -783,7 +783,7 @@ function DesktopDashboard() {
     }
   });
 
-  operators?.forEach((op) => {
+  rawOperators?.forEach((op) => {
     if (op.isOutOfState) {
       const opAvailWindows = availabilityRecords?.filter((r) => r.operatorId === op.id) || [];
       if (opAvailWindows.length > 0) {
@@ -809,6 +809,32 @@ function DesktopDashboard() {
       }
     }
   });
+
+  const visibleOperators = useMemo(() => {
+    if (!rawOperators) return rawOperators;
+
+    const sortOp = (a: Operator, b: Operator) => {
+      if (a.groupName !== b.groupName) return a.groupName.localeCompare(b.groupName);
+      const typeA = a.operatorType === "assistant" ? 1 : 0;
+      const typeB = b.operatorType === "assistant" ? 1 : 0;
+      if (typeA !== typeB) return typeA - typeB;
+      const lastA = a.lastName.toLowerCase();
+      const lastB = b.lastName.toLowerCase();
+      if (lastA !== lastB) return lastA.localeCompare(lastB);
+      return a.firstName.toLowerCase().localeCompare(b.firstName.toLowerCase());
+    };
+
+    const filtered = rawOperators.filter((op) => {
+      if (!op.isOutOfState) return true;
+      const allOff = weekDays.every((day) => operatorOffDays.has(`${op.id}-${day.iso}`));
+      return !allOff;
+    });
+
+    const local = filtered.filter((op) => !op.isOutOfState).sort(sortOp);
+    const oos = filtered.filter((op) => op.isOutOfState).sort(sortOp);
+
+    return [...local, ...oos];
+  }, [rawOperators, weekDays, operatorOffDays]);
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-muted/30">
@@ -984,7 +1010,7 @@ function DesktopDashboard() {
             className="flex flex-col overflow-hidden"
             style={{ width: mapVisible ? `${splitPercent}%` : "100%" }}
           >
-            <AvailabilityChart weekDays={weekDays} jobs={jobs} operators={operators} operatorOffDays={operatorOffDays} />
+            <AvailabilityChart weekDays={weekDays} jobs={jobs} operators={visibleOperators} operatorOffDays={operatorOffDays} />
             <WorkTypeChart weekDays={weekDays} jobs={jobs} />
             <div className="flex border-b bg-muted/50">
               <div className="w-48 shrink-0 p-4 font-semibold text-sm border-r bg-muted/50 sticky left-0 z-10 flex items-center">
@@ -1008,17 +1034,23 @@ function DesktopDashboard() {
                 {(() => {
                   let lastGroup = "";
                   let lastType = "";
+                  let lastOosRegion = "";
                   let rowIndex = 0;
-                  return operators?.map((operator) => {
-                    const showGroupHeader = operator.groupName !== lastGroup;
-                    if (showGroupHeader) { rowIndex = 0; lastType = ""; }
-                    const currentGroup = operator.groupName;
+                  return visibleOperators?.map((operator) => {
+                    const isOos = operator.isOutOfState;
+                    const virtualGroup = isOos ? "Out of State" : operator.groupName;
+                    const showGroupHeader = virtualGroup !== lastGroup;
+                    if (showGroupHeader) { rowIndex = 0; lastType = ""; lastOosRegion = ""; }
+                    const currentGroup = virtualGroup;
                     const isAssistant = operator.operatorType === "assistant";
-                    const showAssistantDivider = !showGroupHeader && isAssistant && lastType !== "assistant";
+                    const showAssistantDivider = !isOos && !showGroupHeader && isAssistant && lastType !== "assistant";
+                    const showOosRegionHeader = isOos && !showGroupHeader && operator.groupName !== lastOosRegion;
+                    if (isOos) lastOosRegion = operator.groupName;
+                    if (showGroupHeader && isOos) lastOosRegion = operator.groupName;
                     lastGroup = currentGroup;
                     lastType = operator.operatorType || "";
                     const isCollapsed = collapsedGroups.has(currentGroup);
-                    if (showAssistantDivider) rowIndex = 0;
+                    if (showAssistantDivider || showOosRegionHeader) rowIndex = 0;
                     const isEven = rowIndex % 2 === 0;
                     rowIndex++;
                     return (
@@ -1049,6 +1081,17 @@ function DesktopDashboard() {
                             ))}
                           </div>
                         )}
+                        {!isCollapsed && isOos && (showGroupHeader || showOosRegionHeader) && (
+                          <div className="flex border-b bg-amber-50/50 dark:bg-amber-950/20" data-testid={`oos-region-${operator.groupName}`}>
+                            <div className="w-48 shrink-0 px-3 py-1 border-r sticky left-0 z-10 bg-amber-50/50 dark:bg-amber-950/20 flex items-center gap-2">
+                              <div className="w-2" />
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600/70 dark:text-amber-400/70">{operator.groupName}</span>
+                            </div>
+                            {weekDays.map((day) => (
+                              <div key={day.iso} className="flex-1 min-w-[140px] border-r last:border-r-0" />
+                            ))}
+                          </div>
+                        )}
                         {!isCollapsed && (
                         <div className="flex border-b last:border-b-0">
                           <div className={cn(
@@ -1064,11 +1107,6 @@ function DesktopDashboard() {
                                 <div className="font-bold text-sm leading-tight truncate">{formatOperatorShortName(operator)}</div>
                                 {operator.phone && (
                                   <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{operator.phone}</div>
-                                )}
-                                {operator.isOutOfState && (
-                                  <div className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 mt-0.5">
-                                    OOS — {operator.groupName}
-                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1251,7 +1289,7 @@ function DesktopDashboard() {
                 style={{ width: `${100 - splitPercent}%` }}
                 data-testid="map-panel"
               >
-                <DashboardMapPanel operators={operators} jobs={jobs} />
+                <DashboardMapPanel operators={visibleOperators} jobs={jobs} />
               </div>
             </>
           )}

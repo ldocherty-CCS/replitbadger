@@ -3,7 +3,6 @@ import { useJobs } from "@/hooks/use-jobs";
 import { useOperators } from "@/hooks/use-operators";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -400,25 +399,47 @@ export function DashboardMapPanel({ operators: propOperators }: DashboardMapPane
   return (
     <div className="h-full w-full flex flex-col" data-testid="map-panel-container">
       <div className="border-b bg-card p-2 shrink-0 space-y-2">
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)} data-testid="button-map-prev-week">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Input
-            type="date"
-            value={rangeStart}
-            onChange={(e) => setRangeStart(e.target.value)}
-            className="w-[130px] text-xs"
-            data-testid="input-map-range-start"
-          />
-          <span className="text-xs text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={rangeEnd}
-            onChange={(e) => setRangeEnd(e.target.value)}
-            className="w-[130px] text-xs"
-            data-testid="input-map-range-end"
-          />
+          <div className="flex items-center gap-1.5 relative">
+            <button
+              type="button"
+              className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer"
+              onClick={() => { const el = document.getElementById("map-range-start-input") as HTMLInputElement; if (el?.showPicker) el.showPicker(); else el?.click(); }}
+              data-testid="display-map-range-start"
+            >
+              {format(parseISO(rangeStart), "EEE, MMM d")}
+            </button>
+            <input
+              id="map-range-start-input"
+              type="date"
+              value={rangeStart}
+              onChange={(e) => setRangeStart(e.target.value)}
+              className="absolute opacity-0 w-px h-px overflow-hidden"
+              data-testid="input-map-range-start"
+              tabIndex={-1}
+            />
+            <span className="text-xs text-muted-foreground">&mdash;</span>
+            <button
+              type="button"
+              className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer"
+              onClick={() => { const el = document.getElementById("map-range-end-input") as HTMLInputElement; if (el?.showPicker) el.showPicker(); else el?.click(); }}
+              data-testid="display-map-range-end"
+            >
+              {format(parseISO(rangeEnd), "EEE, MMM d")}
+            </button>
+            <input
+              id="map-range-end-input"
+              type="date"
+              value={rangeEnd}
+              onChange={(e) => setRangeEnd(e.target.value)}
+              className="absolute opacity-0 w-px h-px overflow-hidden"
+              data-testid="input-map-range-end"
+              tabIndex={-1}
+            />
+          </div>
           <Button variant="outline" size="icon" onClick={() => navigateWeek(1)} data-testid="button-map-next-week">
             <ChevronRight className="h-4 w-4" />
           </Button>
