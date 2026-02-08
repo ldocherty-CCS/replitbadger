@@ -718,6 +718,71 @@ function DesktopDashboard() {
   }, []);
 
 
+  const operatorOffDays = useMemo(() => {
+    const offDays = new Set<string>();
+    timeOffRecords?.forEach((record) => {
+      const start = new Date(record.startDate);
+      const end = new Date(record.endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        offDays.add(`${record.operatorId}-${format(d, "yyyy-MM-dd")}`);
+      }
+    });
+
+    rawOperators?.forEach((op) => {
+      if (op.isOutOfState) {
+        const opAvailWindows = availabilityRecords?.filter((r) => r.operatorId === op.id) || [];
+        if (opAvailWindows.length > 0) {
+          weekDays.forEach((day) => {
+            const dayStr = day.iso;
+            const isAvailable = opAvailWindows.some(
+              (w) => dayStr >= w.startDate && dayStr <= w.endDate
+            );
+            if (!isAvailable) {
+              offDays.add(`${op.id}-${dayStr}`);
+            }
+          });
+        } else if (op.availableFrom || op.availableTo) {
+          weekDays.forEach((day) => {
+            const dayStr = day.iso;
+            if (op.availableFrom && dayStr < op.availableFrom) {
+              offDays.add(`${op.id}-${dayStr}`);
+            }
+            if (op.availableTo && dayStr > op.availableTo) {
+              offDays.add(`${op.id}-${dayStr}`);
+            }
+          });
+        }
+      }
+    });
+    return offDays;
+  }, [timeOffRecords, rawOperators, availabilityRecords, weekDays]);
+
+  const visibleOperators = useMemo(() => {
+    if (!rawOperators) return rawOperators;
+
+    const sortOp = (a: Operator, b: Operator) => {
+      if (a.groupName !== b.groupName) return a.groupName.localeCompare(b.groupName);
+      const typeA = a.operatorType === "assistant" ? 1 : 0;
+      const typeB = b.operatorType === "assistant" ? 1 : 0;
+      if (typeA !== typeB) return typeA - typeB;
+      const lastA = a.lastName.toLowerCase();
+      const lastB = b.lastName.toLowerCase();
+      if (lastA !== lastB) return lastA.localeCompare(lastB);
+      return a.firstName.toLowerCase().localeCompare(b.firstName.toLowerCase());
+    };
+
+    const filtered = rawOperators.filter((op) => {
+      if (!op.isOutOfState) return true;
+      const allOff = weekDays.every((day) => operatorOffDays.has(`${op.id}-${day.iso}`));
+      return !allOff;
+    });
+
+    const local = filtered.filter((op) => !op.isOutOfState).sort(sortOp);
+    const oos = filtered.filter((op) => op.isOutOfState).sort(sortOp);
+
+    return [...local, ...oos];
+  }, [rawOperators, weekDays, operatorOffDays]);
+
   if (jobsLoading || opsLoading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -773,68 +838,6 @@ function DesktopDashboard() {
       }
     }
   }
-
-  const operatorOffDays = new Set<string>();
-  timeOffRecords?.forEach((record) => {
-    const start = new Date(record.startDate);
-    const end = new Date(record.endDate);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      operatorOffDays.add(`${record.operatorId}-${format(d, "yyyy-MM-dd")}`);
-    }
-  });
-
-  rawOperators?.forEach((op) => {
-    if (op.isOutOfState) {
-      const opAvailWindows = availabilityRecords?.filter((r) => r.operatorId === op.id) || [];
-      if (opAvailWindows.length > 0) {
-        weekDays.forEach((day) => {
-          const dayStr = day.iso;
-          const isAvailable = opAvailWindows.some(
-            (w) => dayStr >= w.startDate && dayStr <= w.endDate
-          );
-          if (!isAvailable) {
-            operatorOffDays.add(`${op.id}-${dayStr}`);
-          }
-        });
-      } else if (op.availableFrom || op.availableTo) {
-        weekDays.forEach((day) => {
-          const dayStr = day.iso;
-          if (op.availableFrom && dayStr < op.availableFrom) {
-            operatorOffDays.add(`${op.id}-${dayStr}`);
-          }
-          if (op.availableTo && dayStr > op.availableTo) {
-            operatorOffDays.add(`${op.id}-${dayStr}`);
-          }
-        });
-      }
-    }
-  });
-
-  const visibleOperators = useMemo(() => {
-    if (!rawOperators) return rawOperators;
-
-    const sortOp = (a: Operator, b: Operator) => {
-      if (a.groupName !== b.groupName) return a.groupName.localeCompare(b.groupName);
-      const typeA = a.operatorType === "assistant" ? 1 : 0;
-      const typeB = b.operatorType === "assistant" ? 1 : 0;
-      if (typeA !== typeB) return typeA - typeB;
-      const lastA = a.lastName.toLowerCase();
-      const lastB = b.lastName.toLowerCase();
-      if (lastA !== lastB) return lastA.localeCompare(lastB);
-      return a.firstName.toLowerCase().localeCompare(b.firstName.toLowerCase());
-    };
-
-    const filtered = rawOperators.filter((op) => {
-      if (!op.isOutOfState) return true;
-      const allOff = weekDays.every((day) => operatorOffDays.has(`${op.id}-${day.iso}`));
-      return !allOff;
-    });
-
-    const local = filtered.filter((op) => !op.isOutOfState).sort(sortOp);
-    const oos = filtered.filter((op) => op.isOutOfState).sort(sortOp);
-
-    return [...local, ...oos];
-  }, [rawOperators, weekDays, operatorOffDays]);
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-muted/30">
