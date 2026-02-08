@@ -320,6 +320,87 @@ function AvailabilityChart({
   );
 }
 
+function WorkTypeChart({
+  weekDays,
+  jobs,
+}: {
+  weekDays: { date: Date; iso: string; label: string }[];
+  jobs: Job[] | undefined;
+}) {
+  const todayIso = format(new Date(), "yyyy-MM-dd");
+
+  const dayStats = weekDays.map((day) => {
+    const dayJobs = jobs?.filter(
+      (j) => j.scheduledDate === day.iso && j.status !== "cancelled" && j.status !== "standby"
+    ) || [];
+    const spot = dayJobs.filter((j) => !j.seriesId).length;
+    const project = dayJobs.filter((j) => !!j.seriesId).length;
+    const total = spot + project;
+    return { ...day, spot, project, total };
+  });
+
+  const weekSpot = dayStats.reduce((s, d) => s + d.spot, 0);
+  const weekProject = dayStats.reduce((s, d) => s + d.project, 0);
+  const weekTotal = weekSpot + weekProject;
+
+  return (
+    <div className="flex shrink-0 border-b" data-testid="work-type-chart">
+      <div className="w-48 shrink-0 border-r flex flex-col items-center justify-center px-3 gap-0.5">
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Work Mix</span>
+        {weekTotal > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] font-medium text-blue-600 dark:text-blue-400">{weekSpot}S</span>
+            <span className="text-[9px] text-muted-foreground">/</span>
+            <span className="text-[9px] font-medium text-amber-600 dark:text-amber-400">{weekProject}P</span>
+          </div>
+        )}
+      </div>
+      {dayStats.map((day) => {
+        const isToday = day.iso === todayIso;
+        const spotPct = day.total > 0 ? (day.spot / day.total) * 100 : 0;
+        const projectPct = day.total > 0 ? (day.project / day.total) * 100 : 0;
+
+        return (
+          <div
+            key={day.iso}
+            className={cn(
+              "flex-1 min-w-[140px] flex items-center gap-2 px-3 py-1.5 border-r last:border-r-0",
+              isToday && "bg-primary/[0.03]"
+            )}
+            data-testid={`worktype-day-${day.iso}`}
+          >
+            {day.total > 0 ? (
+              <>
+                <div className="flex-1 flex h-1.5 rounded-full overflow-hidden bg-muted">
+                  {day.spot > 0 && (
+                    <div
+                      className="h-full rounded-l-full"
+                      style={{ width: `${spotPct}%`, background: "hsl(217 91% 60%)" }}
+                    />
+                  )}
+                  {day.project > 0 && (
+                    <div
+                      className="h-full rounded-r-full"
+                      style={{ width: `${projectPct}%`, background: "hsl(38 92% 50%)" }}
+                    />
+                  )}
+                </div>
+                <span className="text-[10px] font-medium tabular-nums shrink-0 leading-none text-muted-foreground">
+                  <span className="text-blue-600 dark:text-blue-400">{day.spot}</span>
+                  <span className="mx-px">/</span>
+                  <span className="text-amber-600 dark:text-amber-400">{day.project}</span>
+                </span>
+              </>
+            ) : (
+              <span className="text-[10px] text-muted-foreground/50">—</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < breakpoint : false
@@ -906,6 +987,7 @@ function DesktopDashboard() {
             style={{ width: mapVisible ? `${splitPercent}%` : "100%" }}
           >
             <AvailabilityChart weekDays={weekDays} jobs={jobs} operators={operators} operatorOffDays={operatorOffDays} />
+            <WorkTypeChart weekDays={weekDays} jobs={jobs} />
             <div className="flex border-b bg-muted/50">
               <div className="w-48 shrink-0 p-4 font-semibold text-sm border-r bg-muted/50 sticky left-0 z-10 flex items-center">
                 Operators
