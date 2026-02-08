@@ -262,48 +262,60 @@ function AvailabilityChart({
     return { ...day, booked, available, overbooked, overbookedCount, effectiveTrucks, offCount };
   });
 
-  return (
-    <div className="border-t bg-card shrink-0" data-testid="availability-chart">
-      <div className="flex items-end">
-        <div className="w-48 shrink-0 px-3 py-2 flex items-end justify-center">
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Availability</span>
-        </div>
-        {dayStats.map((day) => {
-          const availableRatio = day.effectiveTrucks > 0 ? day.available / day.effectiveTrucks : 0;
-          const barHeight = day.overbooked ? 100 : Math.max(6, availableRatio * 100);
+  const todayIso = format(new Date(), "yyyy-MM-dd");
 
-          return (
-            <div key={day.iso} className="flex-1 min-w-[140px] flex flex-col items-center gap-0.5 py-1.5" data-testid={`availability-day-${day.iso}`}>
-              <div className="text-[10px] font-medium text-muted-foreground">{day.label}</div>
-              <div className="relative w-full flex flex-col items-center" style={{ height: "36px" }}>
-                <div
-                  className="absolute bottom-0 w-full max-w-[40px] rounded-sm transition-all duration-300"
-                  style={{
-                    height: `${barHeight}%`,
-                    background: day.overbooked
-                      ? "hsl(0, 84%, 60%)"
-                      : day.available === 0
-                        ? "hsl(40, 96%, 50%)"
-                        : "hsl(142, 71%, 45%)",
-                    opacity: day.overbooked ? 1 : 0.85,
-                  }}
-                  data-testid={`bar-${day.iso}`}
-                />
-              </div>
-              <div className={cn(
-                "text-[11px] font-bold leading-tight",
-                day.overbooked ? "text-destructive" : day.available === 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
-              )}>
-                {day.overbooked ? (
-                  <span>{day.overbookedCount} over</span>
-                ) : (
-                  <span>{day.available}/{day.effectiveTrucks}</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
+  return (
+    <div className="flex shrink-0 border-b" data-testid="availability-chart">
+      <div className="w-48 shrink-0 border-r flex items-center justify-center px-3">
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Trucks</span>
       </div>
+      {dayStats.map((day) => {
+        const pct = day.effectiveTrucks > 0 ? (day.booked / day.effectiveTrucks) * 100 : 0;
+        const clampedPct = Math.min(pct, 100);
+        const isToday = day.iso === todayIso;
+
+        return (
+          <div
+            key={day.iso}
+            className={cn(
+              "flex-1 min-w-[140px] flex items-center gap-2.5 px-3 py-1.5 border-r last:border-r-0",
+              isToday && "bg-primary/[0.03]"
+            )}
+            data-testid={`availability-day-${day.iso}`}
+          >
+            <div className="flex-1 relative h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.max(clampedPct, 4)}%`,
+                  background: day.overbooked
+                    ? "hsl(0 72% 51%)"
+                    : pct >= 100
+                      ? "hsl(38 92% 50%)"
+                      : pct >= 70
+                        ? "hsl(142 71% 45%)"
+                        : "hsl(142 71% 45% / 0.7)",
+                }}
+                data-testid={`bar-${day.iso}`}
+              />
+            </div>
+            <span className={cn(
+              "text-[11px] font-semibold tabular-nums shrink-0 leading-none",
+              day.overbooked
+                ? "text-destructive"
+                : day.available === 0
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-muted-foreground"
+            )}>
+              {day.overbooked ? (
+                <>{day.overbookedCount} over</>
+              ) : (
+                <>{day.booked}/{day.effectiveTrucks}</>
+              )}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -893,6 +905,7 @@ function DesktopDashboard() {
             className="flex flex-col overflow-hidden"
             style={{ width: mapVisible ? `${splitPercent}%` : "100%" }}
           >
+            <AvailabilityChart weekDays={weekDays} jobs={jobs} operators={operators} operatorOffDays={operatorOffDays} />
             <div className="flex border-b bg-muted/50">
               <div className="w-48 shrink-0 p-4 font-semibold text-sm border-r bg-muted/50 sticky left-0 z-10 flex items-center">
                 Operators
@@ -1172,8 +1185,6 @@ function DesktopDashboard() {
           )}
         </DragOverlay>
       </DndContext>
-
-      <AvailabilityChart weekDays={weekDays} jobs={jobs} operators={operators} operatorOffDays={operatorOffDays} />
 
       <CreateJobDialog 
         open={isCreateOpen} 
