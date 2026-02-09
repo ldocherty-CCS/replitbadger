@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users, Truck, UserCircle } from "lucide-react";
+import { MapPin, Clock, Briefcase, AlertTriangle, CheckCircle2, Copy, Trash2, Palette, ShieldAlert, Ban, RotateCcw, Users, Truck, UserCircle, ArrowUp, ArrowDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn, formatOperatorShortName, calculateMileage } from "@/lib/utils";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -29,6 +29,8 @@ interface JobCardProps {
   onStatusChange?: (job: Job, status: string) => void;
   onCancel?: (job: Job) => void;
   onRestore?: (job: Job) => void;
+  onMoveUp?: (job: Job) => void;
+  onMoveDown?: (job: Job) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -70,7 +72,7 @@ const statusDots: Record<string, string> = {
 let _contextActionTimestamp = 0;
 export function wasContextAction() { return Date.now() - _contextActionTimestamp < 300; }
 
-export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, totalJobs, sameLocationIndex, sameLocationTotal, onDuplicate, onDelete, onStatusChange, onCancel, onRestore }: JobCardProps) {
+export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, totalJobs, sameLocationIndex, sameLocationTotal, onDuplicate, onDelete, onStatusChange, onCancel, onRestore, onMoveUp, onMoveDown }: JobCardProps) {
   const draggableId = isAssistantEntry ? `job-${job.id}-assist` : `job-${job.id}`;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: draggableId,
@@ -88,12 +90,12 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
     ? "bg-[hsl(30,90%,50%)] border-[hsl(30,90%,50%)] text-white"
     : statusColors[job.status] || "bg-gray-400 border-gray-400 text-white";
   const needsAssistantAttention = !isAssistantEntry && job.additionalOperatorNeeded && !job.assistantOperator;
-  const hasContextMenu = !isOverlay && !isAssistantEntry && (onDuplicate || onDelete || onStatusChange || onCancel || onRestore);
+  const hasContextMenu = !isOverlay && !isAssistantEntry && (onDuplicate || onDelete || onStatusChange || onCancel || onRestore || onMoveUp || onMoveDown);
 
   const missingQuals = (() => {
     const required: string[] = (job.customer as any)?.requiredQuals || [];
     const has: string[] = (job as any).operator?.qualifications || [];
-    if (required.length === 0 || !job.operatorId) return [];
+    if (required.length === 0 || !job.operatorId || job.status === "standby") return [];
     return required.filter(q => !has.includes(q));
   })();
 
@@ -278,6 +280,24 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
             >
               <RotateCcw className="w-4 h-4 mr-2" />
               Restore Job
+            </ContextMenuItem>
+          )}
+          {onMoveUp && jobIndex !== undefined && jobIndex > 0 && (
+            <ContextMenuItem
+              onClick={() => { _contextActionTimestamp = Date.now(); onMoveUp(job); }}
+              data-testid={`menu-move-up-${job.id}`}
+            >
+              <ArrowUp className="w-4 h-4 mr-2" />
+              Move Up
+            </ContextMenuItem>
+          )}
+          {onMoveDown && jobIndex !== undefined && totalJobs !== undefined && jobIndex < totalJobs - 1 && (
+            <ContextMenuItem
+              onClick={() => { _contextActionTimestamp = Date.now(); onMoveDown(job); }}
+              data-testid={`menu-move-down-${job.id}`}
+            >
+              <ArrowDown className="w-4 h-4 mr-2" />
+              Move Down
             </ContextMenuItem>
           )}
           {onDelete && (

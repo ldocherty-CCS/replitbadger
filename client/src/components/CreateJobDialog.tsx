@@ -540,19 +540,6 @@ export function CreateJobDialog({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="srNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground uppercase tracking-wide">SR #</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} placeholder="SR number" data-testid="input-sr-number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
 
             <div className="rounded-md border bg-muted/30 p-4 space-y-4">

@@ -31,6 +31,7 @@ export interface IStorage {
   deleteJob(id: number): Promise<void>;
   deleteJobsBySeries(seriesId: string, fromDate: string): Promise<number>;
   moveJobsSeries(seriesId: string, operatorId: number, fromDate: string): Promise<number>;
+  updateJobsSeriesSr(seriesId: string, srNumber: string): Promise<number>;
   deleteAssistantJob(mainJobId: number, assistantOperatorId: number, scheduledDate: string): Promise<void>;
 
   // Qualifications
@@ -328,6 +329,14 @@ export class DatabaseStorage implements IStorage {
     const result = await db.update(jobs)
       .set({ operatorId })
       .where(and(eq(jobs.seriesId, seriesId), gte(jobs.scheduledDate, fromDate)))
+      .returning();
+    return result.length;
+  }
+
+  async updateJobsSeriesSr(seriesId: string, srNumber: string): Promise<number> {
+    const result = await db.update(jobs)
+      .set({ srNumber })
+      .where(eq(jobs.seriesId, seriesId))
       .returning();
     return result.length;
   }

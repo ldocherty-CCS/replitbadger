@@ -6,11 +6,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash, Droplets, Trash2, Cable, ClipboardList, Copy, Check } from "lucide-react";
+import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash, Droplets, Trash2, Cable, ClipboardList, Copy, Check, Plus, Loader2 } from "lucide-react";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { format, parseISO } from "date-fns";
 import { formatOperatorFullName } from "@/lib/utils";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const statusLabels: Record<string, string> = {
   dispatched: "Dispatched",
@@ -130,6 +133,10 @@ export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetails
   if (!job) return null;
 
   const [copied, setCopied] = useState(false);
+  const [editingSr, setEditingSr] = useState(false);
+  const [srValue, setSrValue] = useState("");
+  const [savingSr, setSavingSr] = useState(false);
+  const { toast } = useToast();
 
   const statusLabel = statusLabels[job.status] || job.status;
   const statusColor = statusColors[job.status] || "bg-gray-400";
@@ -139,6 +146,24 @@ export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetails
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveSr = async () => {
+    if (!srValue.trim()) return;
+    setSavingSr(true);
+    try {
+      await apiRequest("PUT", `/api/jobs/${job.id}`, { srNumber: srValue.trim() });
+      if ((job as any).seriesId) {
+        await apiRequest("PATCH", `/api/jobs/series/${(job as any).seriesId}/sr`, { srNumber: srValue.trim() });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({ title: "SR# saved", description: (job as any).seriesId ? "Updated all jobs in series." : "SR# has been saved." });
+      setEditingSr(false);
+    } catch {
+      toast({ title: "Error", description: "Failed to save SR#.", variant: "destructive" });
+    } finally {
+      setSavingSr(false);
+    }
   };
 
   return (
@@ -220,16 +245,47 @@ export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetails
             </div>
           )}
 
-          {(job.poNumber || (job as any).srNumber) && (
-            <div className="grid grid-cols-2 gap-4">
-              {job.poNumber && (
-                <DetailRow icon={<Hash className="w-4 h-4" />} label="Job # / PO #" value={job.poNumber} testId="detail-po" />
-              )}
-              {(job as any).srNumber && (
-                <DetailRow icon={<FileText className="w-4 h-4" />} label="SR #" value={(job as any).srNumber} testId="detail-sr" />
+          <div className="grid grid-cols-2 gap-4">
+            {job.poNumber && (
+              <DetailRow icon={<Hash className="w-4 h-4" />} label="Job # / PO #" value={job.poNumber} testId="detail-po" />
+            )}
+            <div className="space-y-1" data-testid="detail-sr">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <FileText className="w-4 h-4" />
+                SR #
+              </div>
+              {editingSr ? (
+                <div className="flex items-center gap-1.5 pl-6">
+                  <Input
+                    value={srValue}
+                    onChange={(e) => setSrValue(e.target.value)}
+                    placeholder="Enter SR#"
+                    className="h-8 text-sm"
+                    data-testid="input-sr-number-inline"
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveSr(); if (e.key === "Escape") setEditingSr(false); }}
+                    autoFocus
+                  />
+                  <Button size="sm" onClick={handleSaveSr} disabled={savingSr || !srValue.trim()} data-testid="button-save-sr">
+                    {savingSr ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  </Button>
+                </div>
+              ) : (job as any).srNumber ? (
+                <div className="flex items-center gap-1.5 pl-6">
+                  <span className="text-sm font-medium" data-testid="text-sr-value">{(job as any).srNumber}</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setSrValue((job as any).srNumber || ""); setEditingSr(true); }} data-testid="button-edit-sr">
+                    <Pencil className="w-3 h-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="pl-6">
+                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setSrValue(""); setEditingSr(true); }} data-testid="button-add-sr">
+                    <Plus className="w-3 h-3 mr-1" />
+                    Add SR#
+                  </Button>
+                </div>
               )}
             </div>
-          )}
+          </div>
 
           {((job as any).water || (job as any).dump) && (
             <div className="grid grid-cols-2 gap-4">

@@ -7,7 +7,6 @@ import {
   Truck, 
   LogOut, 
   Menu,
-  MapPin,
   ShieldCheck,
   BarChart3
 } from "lucide-react";
@@ -30,7 +29,6 @@ export function Navigation() {
     { href: "/operators", label: "Operators", icon: Truck },
     { href: "/customers", label: "Customers", icon: Users },
     { href: "/oq", label: "Qualifications", icon: ShieldCheck },
-    { href: "/map", label: "Map", icon: MapPin },
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
   ];
 

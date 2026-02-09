@@ -56,6 +56,7 @@ import type { Job, Customer, Operator } from "@shared/schema";
 import { DroppableDay } from "@/components/DroppableDay";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardMapPanel } from "@/components/DashboardMapPanel";
+import { api } from "@shared/routes";
 
 const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   dispatched: { hex: "#22c55e", label: "Dispatched" },
@@ -86,6 +87,8 @@ function DayCell({
   onAddNote,
   onRemoveOff,
   onOffDayClick,
+  onMoveUp,
+  onMoveDown,
   isEvenRow,
   isOff,
 }: { 
@@ -105,6 +108,8 @@ function DayCell({
   onAddNote: (date: string, operatorId: number, noteType: string) => void,
   onRemoveOff: (operatorId: number, date: string) => void,
   onOffDayClick: (operatorId: number, date: string) => void,
+  onMoveUp: (job: Job) => void,
+  onMoveDown: (job: Job) => void,
   isEvenRow?: boolean,
   isOff?: boolean,
 }) {
@@ -242,6 +247,8 @@ function DayCell({
                     onStatusChange={onStatusChange}
                     onCancel={onCancel}
                     onRestore={onRestore}
+                    onMoveUp={onMoveUp}
+                    onMoveDown={onMoveDown}
                   />
                 </div>
                 );
@@ -751,6 +758,36 @@ function DesktopDashboard() {
     updateJob.mutate({ id: job.id, status: "ready" });
     toast({ title: "Job Restored", description: `${(job as any).customer?.name || "Job"} has been restored to the board as Ready` });
   }, [updateJob, toast]);
+
+  const handleReorder = useCallback(async (job: Job, direction: "up" | "down") => {
+    const operatorJobs = (jobs || [])
+      .filter(j => j.operatorId === job.operatorId && j.scheduledDate === job.scheduledDate && !(j as any).noteType)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+    const currentIndex = operatorJobs.findIndex(j => j.id === job.id);
+    if (currentIndex < 0) return;
+
+    const swapIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (swapIndex < 0 || swapIndex >= operatorJobs.length) return;
+
+    const currentSort = operatorJobs[currentIndex].sortOrder ?? currentIndex;
+    const swapSort = operatorJobs[swapIndex].sortOrder ?? swapIndex;
+
+    try {
+      await fetch("/api/jobs/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify([
+          { id: operatorJobs[currentIndex].id, sortOrder: swapSort },
+          { id: operatorJobs[swapIndex].id, sortOrder: currentSort },
+        ]),
+      });
+      queryClient.invalidateQueries({ queryKey: [api.jobs.list.path] });
+    } catch (err) {
+      console.error("Reorder failed", err);
+    }
+  }, [jobs]);
 
   const handlePlaceHold = useCallback((date: string, operatorId: number) => {
     setHoldDialog({ open: true, date, operatorId });
@@ -1280,6 +1317,8 @@ function DesktopDashboard() {
                             onAddNote={handleAddNote}
                             onRemoveOff={handleRemoveOff}
                             onOffDayClick={handleOffDayClick}
+                            onMoveUp={(job) => handleReorder(job, "up")}
+                            onMoveDown={(job) => handleReorder(job, "down")}
                             isEvenRow={isEven}
                             isOff={isOff}
                           />
@@ -1500,7 +1539,7 @@ function DesktopDashboard() {
       />
 
       <AlertDialog open={!!removeOffConfirm?.open} onOpenChange={(open) => { if (!open) setRemoveOffConfirm(null); }}>
-        <AlertDialogContent>
+        <AlertDialogContent onWheel={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Time Off</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1537,7 +1576,7 @@ function DesktopDashboard() {
       </AlertDialog>
 
       <AlertDialog open={seriesDeleteConfirm.open} onOpenChange={(open) => { if (!open) setSeriesDeleteConfirm({ open: false, job: null }); }}>
-        <AlertDialogContent>
+        <AlertDialogContent onWheel={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Series Event</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1575,7 +1614,7 @@ function DesktopDashboard() {
       </AlertDialog>
 
       <AlertDialog open={seriesMoveConfirm.open} onOpenChange={(open) => { if (!open) setSeriesMoveConfirm({ open: false, job: null, newOperatorId: 0, newDate: "" }); }}>
-        <AlertDialogContent>
+        <AlertDialogContent onWheel={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
             <AlertDialogTitle>Move Series Event</AlertDialogTitle>
             <AlertDialogDescription>

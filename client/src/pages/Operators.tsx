@@ -80,7 +80,11 @@ export default function Operators() {
     return groups;
   }, [filteredOperators]);
 
-  const sortedGroupNames = Object.keys(groupedOperators).sort();
+  const sortedGroupNames = Object.keys(groupedOperators).sort((a, b) => {
+    if (a.toLowerCase() === "milwaukee") return -1;
+    if (b.toLowerCase() === "milwaukee") return 1;
+    return a.localeCompare(b);
+  });
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">

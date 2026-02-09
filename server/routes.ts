@@ -267,6 +267,56 @@ export async function registerRoutes(
     }
   });
 
+  // === Series Delete (must be before /api/jobs/:id to avoid param matching) ===
+  app.delete("/api/jobs/series/:seriesId", async (req, res) => {
+    try {
+      const seriesId = req.params.seriesId;
+      const fromDate = req.query.fromDate as string;
+      if (!fromDate) {
+        return res.status(400).json({ message: "fromDate query param is required" });
+      }
+      const deleted = await storage.deleteJobsBySeries(seriesId, fromDate);
+      res.json({ deleted });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete series jobs" });
+    }
+  });
+
+  // === Series Move ===
+  app.patch("/api/jobs/series/:seriesId/move", async (req, res) => {
+    try {
+      const seriesId = req.params.seriesId;
+      const { operatorId, fromDate } = z.object({
+        operatorId: z.number(),
+        fromDate: z.string(),
+      }).parse(req.body);
+      const updated = await storage.moveJobsSeries(seriesId, operatorId, fromDate);
+      res.json({ updated });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to move series jobs" });
+    }
+  });
+
+  // === Series SR# Update ===
+  app.patch("/api/jobs/series/:seriesId/sr", async (req, res) => {
+    try {
+      const seriesId = req.params.seriesId;
+      const { srNumber } = z.object({
+        srNumber: z.string(),
+      }).parse(req.body);
+      const updated = await storage.updateJobsSeriesSr(seriesId, srNumber);
+      res.json({ updated });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to update series SR#" });
+    }
+  });
+
   app.delete(api.jobs.delete.path, async (req, res) => {
     const jobId = Number(req.params.id);
     const job = await storage.getJob(jobId);
@@ -634,38 +684,6 @@ export async function registerRoutes(
     }
   });
 
-  // === Series Delete ===
-  app.delete("/api/jobs/series/:seriesId", async (req, res) => {
-    try {
-      const seriesId = req.params.seriesId;
-      const fromDate = req.query.fromDate as string;
-      if (!fromDate) {
-        return res.status(400).json({ message: "fromDate query param is required" });
-      }
-      const deleted = await storage.deleteJobsBySeries(seriesId, fromDate);
-      res.json({ deleted });
-    } catch (err) {
-      res.status(500).json({ message: "Failed to delete series jobs" });
-    }
-  });
-
-  // === Series Move ===
-  app.patch("/api/jobs/series/:seriesId/move", async (req, res) => {
-    try {
-      const seriesId = req.params.seriesId;
-      const { operatorId, fromDate } = z.object({
-        operatorId: z.number(),
-        fromDate: z.string(),
-      }).parse(req.body);
-      const updated = await storage.moveJobsSeries(seriesId, operatorId, fromDate);
-      res.json({ updated });
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
-      }
-      res.status(500).json({ message: "Failed to move series jobs" });
-    }
-  });
 
   // === Geocode Backfill (geocode existing jobs without coordinates) ===
   app.post("/api/jobs/geocode-backfill", async (req, res) => {
