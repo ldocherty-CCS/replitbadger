@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Loader2, Plus, Pencil, Trash2, Search, X, Check, ChevronsUpDown, MapPinOff, Calendar, Clock, Upload, FileText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +60,28 @@ export default function Operators() {
     op.groupName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const groupedOperators = useMemo(() => {
+    if (!filteredOperators) return {};
+    const groups: Record<string, typeof filteredOperators> = {};
+    filteredOperators.forEach(op => {
+      const group = op.groupName || "Ungrouped";
+      if (!groups[group]) groups[group] = [];
+      groups[group].push(op);
+    });
+    Object.values(groups).forEach(ops => {
+      ops.sort((a, b) => {
+        if (a.operatorType === "assistant" && b.operatorType !== "assistant") return 1;
+        if (a.operatorType !== "assistant" && b.operatorType === "assistant") return -1;
+        const lastNameCmp = a.lastName.localeCompare(b.lastName);
+        if (lastNameCmp !== 0) return lastNameCmp;
+        return a.firstName.localeCompare(b.firstName);
+      });
+    });
+    return groups;
+  }, [filteredOperators]);
+
+  const sortedGroupNames = Object.keys(groupedOperators).sort();
+
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
@@ -89,90 +111,102 @@ export default function Operators() {
         <div className="flex justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
+      ) : sortedGroupNames.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">No operators found</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredOperators?.map((op) => (
-            <Card key={op.id} className="group hover:shadow-md transition-shadow" data-testid={`card-operator-${op.id}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 pb-2">
-                <div className="flex items-center gap-3">
-                  <div 
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
-                    style={{ backgroundColor: getOperatorColor(op) }}
-                  >
-                    {(op.firstName.charAt(0) + op.lastName.charAt(0)).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-lg font-bold">{formatOperatorFullName(op)}</CardTitle>
-                      {op.isOutOfState && (
-                        <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 dark:text-amber-400">OOS</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{op.groupName} &middot; {getOperatorTypeLabel(op.operatorType)}</p>
-                  </div>
-                </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => setDocumentsOp(op)} data-testid={`button-documents-${op.id}`}>
-                    <FileText className="w-4 h-4 text-muted-foreground" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => { setEditingOp(op); setIsDialogOpen(true); }} data-testid={`button-edit-operator-${op.id}`}>
-                    <Pencil className="w-4 h-4 text-muted-foreground" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => {
-                    if (confirm("Are you sure? This cannot be undone.")) {
-                      deleteOp.mutate(op.id);
-                    }
-                  }} data-testid={`button-delete-operator-${op.id}`}>
-                    <Trash2 className="w-4 h-4 text-muted-foreground" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4 mt-2">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-muted-foreground">Phone:</div>
-                    <div className="font-medium text-right">{op.phone || "N/A"}</div>
-                    
-                    <div className="text-muted-foreground">Location:</div>
-                    <div className="font-medium text-right truncate">
-                      {op.isOutOfState ? "Near prev. job" : (op.truckLocation || "N/A")}
-                    </div>
-                    {op.isOutOfState && (
-                      <>
-                        <div className="text-muted-foreground">Availability:</div>
-                        <div className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs gap-1"
-                            onClick={() => setAvailabilityOp(op)}
-                            data-testid={`button-availability-${op.id}`}
-                          >
-                            <Calendar className="w-3 h-3" />
-                            Manage
-                          </Button>
+        <div className="space-y-8">
+          {sortedGroupNames.map(groupName => (
+            <div key={groupName} data-testid={`group-${groupName}`}>
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-lg font-semibold text-foreground">{groupName}</h2>
+                <Badge variant="secondary">{groupedOperators[groupName].length}</Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {groupedOperators[groupName].map((op) => (
+                  <Card key={op.id} className="group hover:shadow-md transition-shadow" data-testid={`card-operator-${op.id}`}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 pb-2">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0"
+                          style={{ backgroundColor: getOperatorColor(op) }}
+                        >
+                          {(op.firstName.charAt(0) + op.lastName.charAt(0)).toUpperCase()}
                         </div>
-                      </>
-                    )}
-                  </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-lg font-bold">{formatOperatorFullName(op)}</CardTitle>
+                            {op.isOutOfState && (
+                              <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 dark:text-amber-400">OOS</Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{op.groupName} &middot; {getOperatorTypeLabel(op.operatorType)}</p>
+                        </div>
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => setDocumentsOp(op)} data-testid={`button-documents-${op.id}`}>
+                          <FileText className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => { setEditingOp(op); setIsDialogOpen(true); }} data-testid={`button-edit-operator-${op.id}`}>
+                          <Pencil className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => {
+                          if (confirm("Are you sure? This cannot be undone.")) {
+                            deleteOp.mutate(op.id);
+                          }
+                        }} data-testid={`button-delete-operator-${op.id}`}>
+                          <Trash2 className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4 mt-2">
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="text-muted-foreground">Phone:</div>
+                          <div className="font-medium text-right">{op.phone || "N/A"}</div>
+                          
+                          <div className="text-muted-foreground">Location:</div>
+                          <div className="font-medium text-right truncate">
+                            {op.isOutOfState ? "Near prev. job" : (op.truckLocation || "N/A")}
+                          </div>
+                          {op.isOutOfState && (
+                            <>
+                              <div className="text-muted-foreground">Availability:</div>
+                              <div className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs gap-1"
+                                  onClick={() => setAvailabilityOp(op)}
+                                  data-testid={`button-availability-${op.id}`}
+                                >
+                                  <Calendar className="w-3 h-3" />
+                                  Manage
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                        </div>
 
-                  <div className="pt-2">
-                    <div className="text-xs font-semibold mb-2 uppercase tracking-wider text-muted-foreground">Certifications / OQs</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {op.qualifications?.length ? (
-                        op.qualifications.map((q, i) => (
-                          <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0.5" data-testid={`badge-qual-${op.id}-${i}`}>
-                            {q}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">No certifications listed</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                        <div className="pt-2">
+                          <div className="text-xs font-semibold mb-2 uppercase tracking-wider text-muted-foreground">Certifications / OQs</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {op.qualifications?.length ? (
+                              op.qualifications.map((q, i) => (
+                                <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0.5" data-testid={`badge-qual-${op.id}-${i}`}>
+                                  {q}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">No certifications listed</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

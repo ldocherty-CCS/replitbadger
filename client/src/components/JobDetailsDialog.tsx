@@ -6,7 +6,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash, Droplets, Trash2, Cable, ClipboardList } from "lucide-react";
+import { useState } from "react";
+import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash, Droplets, Trash2, Cable, ClipboardList, Copy, Check } from "lucide-react";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { format, parseISO } from "date-fns";
 import { formatOperatorFullName } from "@/lib/utils";
@@ -35,6 +36,89 @@ const statusColors: Record<string, string> = {
   standby: "bg-[hsl(270,60%,55%)]",
 };
 
+function buildJobText(job: Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator; creator?: { id: string; firstName: string | null; lastName: string | null } | null }, statusLabel: string): string {
+  const lines: string[] = [];
+
+  if (job.customerId && job.customer?.name) {
+    lines.push(`Customer: ${job.customer.name}`);
+  }
+
+  lines.push(`Status: ${statusLabel}`);
+
+  if (job.scope) {
+    lines.push(`Scope: ${job.scope}`);
+  }
+
+  const formattedDate = format(parseISO(job.scheduledDate), "EEE, MMM d, yyyy");
+  lines.push(`Date: ${formattedDate}`);
+
+  if (job.startTime) {
+    lines.push(`Time: ${job.startTime}`);
+  }
+
+  if (job.address) {
+    lines.push(`Address: ${job.address}`);
+  }
+
+  if (job.operator) {
+    lines.push(`Operator: ${formatOperatorFullName(job.operator)}`);
+  }
+
+  if (job.additionalOperatorNeeded && job.assistantOperator) {
+    lines.push(`Assistant: ${formatOperatorFullName(job.assistantOperator)}`);
+  }
+
+  if (job.requestorContact) {
+    lines.push(`Requestor: ${job.requestorContact}`);
+  }
+
+  if (job.onSiteContact) {
+    lines.push(`On-Site Contact: ${job.onSiteContact}`);
+  }
+
+  if (job.poNumber) {
+    lines.push(`Job # / PO #: ${job.poNumber}`);
+  }
+
+  if ((job as any).srNumber) {
+    lines.push(`SR #: ${(job as any).srNumber}`);
+  }
+
+  if ((job as any).water) {
+    lines.push(`Water: ${(job as any).water === "on_site" ? "On Site" : "Off Site"}`);
+  }
+
+  if ((job as any).dump) {
+    lines.push(`Dump: ${(job as any).dump === "on_site" ? "On Site" : "Off Site"}`);
+  }
+
+  if ((job as any).remoteHose) {
+    const hoseValue = (job as any).remoteHoseLength ? `Yes - ${(job as any).remoteHoseLength}` : "Yes";
+    lines.push(`Remote Hose: ${hoseValue}`);
+  }
+
+  if ((job as any).manifestNumber) {
+    lines.push(`Manifest #: ${(job as any).manifestNumber}`);
+  }
+
+  if ((job as any).manifestDumpLocationName || (job as any).manifestDumpLocation) {
+    const locationParts = [];
+    if ((job as any).manifestDumpLocationName) {
+      locationParts.push((job as any).manifestDumpLocationName);
+    }
+    if ((job as any).manifestDumpLocation) {
+      locationParts.push((job as any).manifestDumpLocation);
+    }
+    lines.push(`Dump Location: ${locationParts.join(" - ")}`);
+  }
+
+  if ((job as any).scheduledDumpTimes && (job as any).scheduledDumpTimes.length > 0) {
+    lines.push(`Scheduled Dump Times: ${(job as any).scheduledDumpTimes.join(", ")}`);
+  }
+
+  return lines.join("\n");
+}
+
 interface JobDetailsDialogProps {
   job: (Job & { customer?: Customer; operator?: Operator; assistantOperator?: Operator; creator?: { id: string; firstName: string | null; lastName: string | null } | null }) | null;
   open: boolean;
@@ -45,8 +129,17 @@ interface JobDetailsDialogProps {
 export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetailsDialogProps) {
   if (!job) return null;
 
+  const [copied, setCopied] = useState(false);
+
   const statusLabel = statusLabels[job.status] || job.status;
   const statusColor = statusColors[job.status] || "bg-gray-400";
+
+  const handleCopy = async () => {
+    const text = buildJobText(job, statusLabel);
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -68,6 +161,24 @@ export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetails
               >
                 <Pencil className="w-3.5 h-3.5 mr-1.5" />
                 Edit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopy}
+                data-testid="button-copy-job"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 mr-1.5" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 mr-1.5" />
+                    Copy
+                  </>
+                )}
               </Button>
             </div>
           </div>

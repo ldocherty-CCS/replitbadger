@@ -268,7 +268,12 @@ export async function registerRoutes(
   });
 
   app.delete(api.jobs.delete.path, async (req, res) => {
-    await storage.deleteJob(Number(req.params.id));
+    const jobId = Number(req.params.id);
+    const job = await storage.getJob(jobId);
+    if (job && job.additionalOperatorNeeded && job.assistantOperatorId) {
+      await storage.deleteAssistantJob(jobId, job.assistantOperatorId, job.scheduledDate);
+    }
+    await storage.deleteJob(jobId);
     res.status(204).send();
   });
 

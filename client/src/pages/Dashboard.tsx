@@ -30,7 +30,7 @@ import { JobDetailsDialog } from "@/components/JobDetailsDialog";
 import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
 import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
-import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, FileText, Eye, Search, X, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, FileText, Eye, Search, X, Calendar, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -100,6 +100,8 @@ function DayCell({
 }) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
+  const [noteCtxMenu, setNoteCtxMenu] = useState<{ x: number; y: number; noteId: number } | null>(null);
+  const noteCtxMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ctxMenu) return;
@@ -120,10 +122,30 @@ function DayCell({
     };
   }, [ctxMenu]);
 
+  useEffect(() => {
+    if (!noteCtxMenu) return;
+    const dismiss = (e: MouseEvent) => {
+      if (noteCtxMenuRef.current && noteCtxMenuRef.current.contains(e.target as Node)) return;
+      setNoteCtxMenu(null);
+    };
+    const dismissScroll = () => setNoteCtxMenu(null);
+    setTimeout(() => {
+      window.addEventListener("mousedown", dismiss);
+      window.addEventListener("contextmenu", dismiss);
+      window.addEventListener("scroll", dismissScroll, true);
+    }, 0);
+    return () => {
+      window.removeEventListener("mousedown", dismiss);
+      window.removeEventListener("contextmenu", dismiss);
+      window.removeEventListener("scroll", dismissScroll, true);
+    };
+  }, [noteCtxMenu]);
+
   const handleContextMenu = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-testid^="card-job-"]')) return;
     e.preventDefault();
     e.stopPropagation();
+    setNoteCtxMenu(null);
     setCtxMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -181,7 +203,8 @@ function DayCell({
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        onJobClick(note);
+                        setCtxMenu(null);
+                        setNoteCtxMenu({ x: e.clientX, y: e.clientY, noteId: note.id });
                       }}
                       data-testid={`note-sliver-${note.id}`}
                     >
@@ -273,6 +296,28 @@ function DayCell({
           >
             <StickyNote className="w-3.5 h-3.5" />
             Add Day Note
+          </button>
+        </div>
+      )}
+      {noteCtxMenu && (
+        <div
+          ref={noteCtxMenuRef}
+          className="fixed z-50 min-w-[140px] rounded-md border bg-popover p-1 shadow-md"
+          style={{ left: noteCtxMenu.x, top: noteCtxMenu.y }}
+          data-testid={`note-context-menu-${noteCtxMenu.noteId}`}
+        >
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover-elevate cursor-pointer text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              const noteJob = jobs.find(j => j.id === noteCtxMenu.noteId);
+              if (noteJob) onDelete(noteJob);
+              setNoteCtxMenu(null);
+            }}
+            data-testid={`menu-delete-note-${noteCtxMenu.noteId}`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete Note
           </button>
         </div>
       )}

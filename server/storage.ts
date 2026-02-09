@@ -6,7 +6,7 @@ import {
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
   type OperatorQualificationWithDetails
 } from "@shared/schema";
-import { eq, and, gte, lte, or, ilike, aliasedTable, desc } from "drizzle-orm";
+import { eq, and, gte, lte, or, ilike, aliasedTable, desc, ne } from "drizzle-orm";
 
 export interface IStorage {
   // Operators
@@ -29,6 +29,7 @@ export interface IStorage {
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: number, updates: UpdateJobRequest): Promise<Job>;
   deleteJob(id: number): Promise<void>;
+  deleteAssistantJob(mainJobId: number, assistantOperatorId: number, scheduledDate: string): Promise<void>;
 
   // Qualifications
   getQualifications(): Promise<Qualification[]>;
@@ -306,6 +307,28 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: number): Promise<void> {
     await db.delete(jobs).where(eq(jobs.id, id));
+  }
+
+  async deleteAssistantJob(mainJobId: number, assistantOperatorId: number, scheduledDate: string): Promise<void> {
+    const mainJob = await this.getJob(mainJobId);
+    if (!mainJob) return;
+
+    const conditions = [
+      eq(jobs.operatorId, assistantOperatorId),
+      eq(jobs.scheduledDate, scheduledDate),
+      mainJob.customerId ? eq(jobs.customerId, mainJob.customerId) : undefined,
+      eq(jobs.address, mainJob.address),
+      eq(jobs.scope, mainJob.scope),
+      ne(jobs.id, mainJobId)
+    ];
+
+    const matchingJobs = await db.select()
+      .from(jobs)
+      .where(and(...conditions.filter(Boolean)));
+
+    for (const assistJob of matchingJobs) {
+      await db.delete(jobs).where(eq(jobs.id, assistJob.id));
+    }
   }
 
   // Operator Qualifications

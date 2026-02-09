@@ -12,8 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
-import { format, addDays, startOfWeek, parseISO, addWeeks } from "date-fns";
+import { Loader2, RefreshCw } from "lucide-react";
+import { format, addDays, startOfWeek, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useGoogleMapsReady } from "@/components/AddressAutocomplete";
@@ -83,17 +83,12 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
   const monday = weekStart || format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
   const friday = weekEnd || format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), "yyyy-MM-dd");
 
-  const [rangeStart, setRangeStart] = useState(monday);
-  const [rangeEnd, setRangeEnd] = useState(friday);
+  const rangeStart = weekStart || format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const rangeEnd = weekEnd || format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), "yyyy-MM-dd");
   const [hideDispatched, setHideDispatched] = useState(true);
   const [seriesFilter, setSeriesFilter] = useState<string>("all");
   const [isBackfilling, setIsBackfilling] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    if (weekStart) setRangeStart(weekStart);
-    if (weekEnd) setRangeEnd(weekEnd);
-  }, [weekStart, weekEnd]);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMap = useRef<google.maps.Map | null>(null);
@@ -113,6 +108,7 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
   const filteredJobs = useMemo(() => {
     if (!jobs) return [];
     let result = jobs as any[];
+    result = result.filter((j) => j.customerId != null);
     if (hideDispatched) {
       result = result.filter((j) => j.status !== "dispatched");
     }
@@ -363,13 +359,6 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
     }
   }, [filteredJobs, operators, jobs, isMultiDay, mapsReady, rangeEnd]);
 
-  const navigateWeek = (direction: number) => {
-    const start = parseISO(rangeStart);
-    const newStart = addWeeks(start, direction);
-    setRangeStart(format(newStart, "yyyy-MM-dd"));
-    setRangeEnd(format(addDays(newStart, 4), "yyyy-MM-dd"));
-  };
-
   const handleBackfill = async () => {
     setIsBackfilling(true);
     try {
@@ -406,41 +395,8 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
   return (
     <div className="h-full w-full flex flex-col" data-testid="map-panel-container">
       <div className="border-b bg-card p-2 shrink-0 space-y-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)} data-testid="button-map-prev-week">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={rangeStart}
-              onChange={(e) => setRangeStart(e.target.value)}
-              className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer bg-transparent border-none outline-none"
-              data-testid="input-map-range-start"
-            />
-            <span className="text-xs text-muted-foreground">&mdash;</span>
-            <input
-              type="date"
-              value={rangeEnd}
-              onChange={(e) => setRangeEnd(e.target.value)}
-              className="text-xs font-medium px-2 py-1 rounded-md hover:bg-accent/50 transition-colors cursor-pointer bg-transparent border-none outline-none"
-              data-testid="input-map-range-end"
-            />
-          </div>
-          <Button variant="outline" size="icon" onClick={() => navigateWeek(1)} data-testid="button-map-next-week">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setRangeStart(monday);
-              setRangeEnd(friday);
-            }}
-            data-testid="button-map-this-week"
-          >
-            This Week
-          </Button>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium">{format(parseISO(rangeStart), "MMM d")} — {format(parseISO(rangeEnd), "MMM d, yyyy")}</span>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
