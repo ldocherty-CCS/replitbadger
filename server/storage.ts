@@ -157,6 +157,9 @@ export class DatabaseStorage implements IStorage {
       poNumber: jobs.poNumber,
       ticketCreated: jobs.ticketCreated,
       manifestNeeded: jobs.manifestNeeded,
+      manifestNumber: jobs.manifestNumber,
+      manifestDumpLocation: jobs.manifestDumpLocation,
+      scheduledDumpTimes: jobs.scheduledDumpTimes,
       siteQuals: jobs.siteQuals,
       additionalOperatorNeeded: jobs.additionalOperatorNeeded,
       assistantOperatorId: jobs.assistantOperatorId,
@@ -226,6 +229,9 @@ export class DatabaseStorage implements IStorage {
       poNumber: jobs.poNumber,
       ticketCreated: jobs.ticketCreated,
       manifestNeeded: jobs.manifestNeeded,
+      manifestNumber: jobs.manifestNumber,
+      manifestDumpLocation: jobs.manifestDumpLocation,
+      scheduledDumpTimes: jobs.scheduledDumpTimes,
       siteQuals: jobs.siteQuals,
       additionalOperatorNeeded: jobs.additionalOperatorNeeded,
       assistantOperatorId: jobs.assistantOperatorId,
@@ -242,7 +248,7 @@ export class DatabaseStorage implements IStorage {
     .where(
       or(
         ilike(customers.name, pattern),
-        ilike(operators.name, pattern),
+        ilike(operators.firstName, pattern),
         ilike(jobs.address, pattern),
         ilike(jobs.scope, pattern),
         ilike(jobs.poNumber, pattern),

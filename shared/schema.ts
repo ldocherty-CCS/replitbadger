@@ -90,6 +90,9 @@ export const jobs = pgTable("jobs", {
   poNumber: text("po_number"),
   ticketCreated: boolean("ticket_created").default(false),
   manifestNeeded: boolean("manifest_needed").default(false),
+  manifestNumber: text("manifest_number"),
+  manifestDumpLocation: text("manifest_dump_location"),
+  scheduledDumpTimes: text("scheduled_dump_times").array(),
   
   // Remote Hose
   remoteHose: boolean("remote_hose").default(false),
