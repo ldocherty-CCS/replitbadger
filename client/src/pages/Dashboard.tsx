@@ -28,7 +28,7 @@ import { PlaceHoldDialog } from "@/components/PlaceHoldDialog";
 import { TimeOffDialog } from "@/components/TimeOffDialog";
 import { JobDetailsDialog } from "@/components/JobDetailsDialog";
 import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
-import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff } from "@/hooks/use-time-off";
+import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff, useCreateTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
 import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, FileText, Eye, Search, X, Calendar, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +87,7 @@ function DayCell({
   onAddNote,
   onRemoveOff,
   onOffDayClick,
+  onAddDayOff,
   onMoveUp,
   onMoveDown,
   isEvenRow,
@@ -108,6 +109,7 @@ function DayCell({
   onAddNote: (date: string, operatorId: number, noteType: string) => void,
   onRemoveOff: (operatorId: number, date: string) => void,
   onOffDayClick: (operatorId: number, date: string) => void,
+  onAddDayOff: (operatorId: number, date: string) => void,
   onMoveUp: (job: Job) => void,
   onMoveDown: (job: Job) => void,
   isEvenRow?: boolean,
@@ -264,7 +266,7 @@ function DayCell({
           style={{ left: ctxMenu.x, top: ctxMenu.y }}
           data-testid={`cell-context-menu-${operatorId}-${date}`}
         >
-          {isOff && (
+          {isOff ? (
             <button
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover-elevate cursor-pointer text-destructive"
               onClick={(e) => {
@@ -276,6 +278,19 @@ function DayCell({
             >
               <CalendarOff className="w-3.5 h-3.5" />
               Remove Day Off
+            </button>
+          ) : (
+            <button
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover-elevate cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCtxMenu(null);
+                onAddDayOff(operatorId, date);
+              }}
+              data-testid={`menu-add-day-off-${operatorId}-${date}`}
+            >
+              <CalendarOff className="w-3.5 h-3.5" />
+              Add Day Off
             </button>
           )}
           <button
@@ -799,6 +814,11 @@ function DesktopDashboard() {
 
   const removeTimeOffDay = useRemoveTimeOffDay();
   const deleteTimeOff = useDeleteTimeOff();
+  const createTimeOff = useCreateTimeOff();
+
+  const handleAddDayOff = useCallback((operatorId: number, date: string) => {
+    createTimeOff.mutate({ operatorId, startDate: date, endDate: date });
+  }, [createTimeOff]);
 
   const handleRemoveOff = useCallback(async (operatorId: number, date: string) => {
     const record = timeOffRecords?.find((r) => {
@@ -1317,6 +1337,7 @@ function DesktopDashboard() {
                             onAddNote={handleAddNote}
                             onRemoveOff={handleRemoveOff}
                             onOffDayClick={handleOffDayClick}
+                            onAddDayOff={handleAddDayOff}
                             onMoveUp={(job) => handleReorder(job, "up")}
                             onMoveDown={(job) => handleReorder(job, "down")}
                             isEvenRow={isEven}
