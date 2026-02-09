@@ -74,9 +74,8 @@ export function JobCard({ job, isOverlay, compact, isAssistantEntry, jobIndex, t
   const draggableId = isAssistantEntry ? `job-${job.id}-assist` : `job-${job.id}`;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: draggableId,
-    disabled: isAssistantEntry,
     data: { 
-      type: "Job", 
+      type: isAssistantEntry ? "AssistantJob" : "Job",
       job 
     },
   });

@@ -160,29 +160,60 @@ function DayCell({
         onContextMenu={handleContextMenu}
         data-testid={`cell-${operatorId}-${date}`}
       >
-        {jobs
-          .slice()
-          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-          .map((job, idx) => {
-          const isAssist = assistantJobIds.has(job.id) && (job as any).assistantOperatorId === operatorId;
+        {(() => {
+          const noteJobs = jobs.filter(j => !j.customerId);
+          const regularJobs = jobs.filter(j => !!j.customerId);
           return (
-          <div key={`${job.id}${isAssist ? '-assist' : ''}`} onClick={(e) => { e.stopPropagation(); if (!wasContextAction()) onJobClick(job); }}>
-            <JobCard
-              job={job}
-              jobIndex={idx}
-              totalJobs={jobs.length}
-              sameLocationIndex={locationGroupMap[job.id]?.index}
-              sameLocationTotal={locationGroupMap[job.id]?.total}
-              isAssistantEntry={isAssist}
-              onDuplicate={onDuplicate}
-              onDelete={onDelete}
-              onStatusChange={onStatusChange}
-              onCancel={onCancel}
-              onRestore={onRestore}
-            />
-          </div>
+            <>
+              {noteJobs.length > 0 && (
+                <div className="space-y-0.5 mb-1">
+                  {noteJobs.map(note => (
+                    <div
+                      key={`note-${note.id}`}
+                      className="text-[9px] font-medium px-1.5 py-0.5 rounded-sm truncate cursor-pointer bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 border border-amber-200/50 dark:border-amber-700/50"
+                      title={note.scope || "Note"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onJobClick(note);
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onJobClick(note);
+                      }}
+                      data-testid={`note-sliver-${note.id}`}
+                    >
+                      {note.scope || "Note"}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {regularJobs
+                .slice()
+                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                .map((job, idx) => {
+                const isAssist = assistantJobIds.has(job.id) && (job as any).assistantOperatorId === operatorId;
+                return (
+                <div key={`${job.id}${isAssist ? '-assist' : ''}`} onClick={(e) => { e.stopPropagation(); if (!wasContextAction()) onJobClick(job); }}>
+                  <JobCard
+                    job={job}
+                    jobIndex={idx}
+                    totalJobs={regularJobs.length}
+                    sameLocationIndex={locationGroupMap[job.id]?.index}
+                    sameLocationTotal={locationGroupMap[job.id]?.total}
+                    isAssistantEntry={isAssist}
+                    onDuplicate={onDuplicate}
+                    onDelete={onDelete}
+                    onStatusChange={onStatusChange}
+                    onCancel={onCancel}
+                    onRestore={onRestore}
+                  />
+                </div>
+                );
+              })}
+            </>
           );
-        })}
+        })()}
       </div>
       {ctxMenu && (
         <div
@@ -561,7 +592,27 @@ function DesktopDashboard() {
       return;
     }
 
+    const isAssistantDrag = active.data.current?.type === "AssistantJob";
     const targetOp = operators?.find((o: any) => o.id === operatorId);
+
+    if (isAssistantDrag) {
+      if (operatorId && dateStr && operatorOffDays.has(`${operatorId}-${dateStr}`)) {
+        const opName = targetOp ? formatOperatorFullName(targetOp) : "This operator";
+        toast({ title: "Cannot Assign", description: `${opName} has the day off on ${format(parseISO(dateStr), "EEE M/d")}. Remove their time off first.`, variant: "destructive" });
+        return;
+      }
+
+      if (job.assistantOperatorId !== operatorId) {
+        await updateJob.mutateAsync({
+          id: job.id,
+          assistantOperatorId: operatorId,
+        });
+        const opName = targetOp ? formatOperatorFullName(targetOp) : "operator";
+        toast({ title: "Assistant Reassigned", description: `Assistant moved to ${opName}` });
+      }
+      return;
+    }
+
     if (targetOp && ((targetOp as any).isAssistantOnly || (targetOp as any).operatorType === "assistant")) {
       toast({ title: "Cannot Assign", description: `${formatOperatorFullName(targetOp)} is an assistant operator. Assign them as an assistant on a job instead.`, variant: "destructive" });
       return;
@@ -573,7 +624,7 @@ function DesktopDashboard() {
       return;
     }
 
-    const updates: { id: number; operatorId?: number; scheduledDate?: string; sortOrder?: number; status?: string } = { id: job.id };
+    const updates: { id: number; operatorId?: number; scheduledDate?: string; sortOrder?: number; status?: string; assistantOperatorId?: number | null } = { id: job.id };
     let changed = false;
 
     if (job.operatorId !== operatorId || job.scheduledDate !== dateStr) {
@@ -724,10 +775,11 @@ function DesktopDashboard() {
   const operatorOffDays = useMemo(() => {
     const offDays = new Set<string>();
     timeOffRecords?.forEach((record) => {
-      const start = new Date(record.startDate);
-      const end = new Date(record.endDate);
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        offDays.add(`${record.operatorId}-${format(d, "yyyy-MM-dd")}`);
+      let current = parseISO(record.startDate);
+      const end = parseISO(record.endDate);
+      while (current <= end) {
+        offDays.add(`${record.operatorId}-${format(current, "yyyy-MM-dd")}`);
+        current = addDays(current, 1);
       }
     });
 

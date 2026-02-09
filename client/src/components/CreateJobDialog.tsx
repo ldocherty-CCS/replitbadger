@@ -218,6 +218,22 @@ export function CreateJobDialog({
     return operatorOffDays.has(`${watchedOperatorId}-${watchedDate}`);
   }, [watchedOperatorId, watchedDate, operatorOffDays]);
 
+  const operatorHasDayOff = useCallback((operatorId: number, date: string) => {
+    if (!date) return false;
+    if (timeOffRecords?.some((r) => r.operatorId === operatorId && date >= r.startDate && date <= r.endDate)) {
+      return true;
+    }
+    const op = operators?.find(o => o.id === operatorId);
+    if (op?.isOutOfState) {
+      const opWindows = availabilityRecords?.filter(r => r.operatorId === operatorId) || [];
+      if (opWindows.length > 0) {
+        const isAvailable = opWindows.some(w => date >= w.startDate && date <= w.endDate);
+        if (!isAvailable) return true;
+      }
+    }
+    return false;
+  }, [timeOffRecords, operators, availabilityRecords]);
+
   const handleCopyRequestorToContact = () => {
     const requestor = form.getValues("requestorContact");
     if (requestor) {
@@ -699,6 +715,7 @@ export function CreateJobDialog({
                             <SelectItem value="none">Not assigned yet</SelectItem>
                             {operators
                               ?.filter((op) => op.id !== form.watch("operatorId"))
+                              .filter((op) => !operatorHasDayOff(op.id, form.watch("scheduledDate")))
                               .map((op) => (
                                 <SelectItem key={op.id} value={op.id.toString()}>
                                   {formatOperatorFullName(op)}
