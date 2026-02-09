@@ -108,7 +108,7 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
   const filteredJobs = useMemo(() => {
     if (!jobs) return [];
     let result = jobs as any[];
-    result = result.filter((j) => j.customerId != null);
+    result = result.filter((j) => j.customerId != null && j.operatorId != null);
     if (hideDispatched) {
       result = result.filter((j) => j.status !== "dispatched");
     }
