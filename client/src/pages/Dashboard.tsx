@@ -178,7 +178,7 @@ function DayCell({
     >
       {isOff && (
         <div 
-          className="absolute inset-0 flex items-center justify-center cursor-pointer z-[1]"
+          className="absolute inset-0 flex items-center justify-center cursor-pointer z-[3]"
           style={{
             backgroundImage: "repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(239,68,68,0.15) 8px, rgba(239,68,68,0.15) 10px)",
           }}
