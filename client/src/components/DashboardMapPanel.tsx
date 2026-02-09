@@ -80,6 +80,7 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
   const [hideDispatched, setHideDispatched] = useState(true);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [weatherLayer, setWeatherLayer] = useState<string | null>(null);
+  const [mapInitialized, setMapInitialized] = useState(false);
   const { toast } = useToast();
 
   const mapRef = useRef<HTMLDivElement>(null);
@@ -127,15 +128,17 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
       fullscreenControl: false,
     });
     googleInfoWindow.current = new google.maps.InfoWindow();
+    setMapInitialized(true);
     return () => {
       googleMarkers.current.forEach((m) => m.setMap(null));
       googleMarkers.current = [];
       googleMap.current = null;
+      setMapInitialized(false);
     };
   }, [mapsReady]);
 
   useEffect(() => {
-    if (!googleMap.current || !mapsReady) return;
+    if (!googleMap.current || !mapInitialized) return;
 
     if (weatherTileLayer.current) {
       const overlays = googleMap.current.overlayMapTypes;
@@ -147,19 +150,46 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
       weatherTileLayer.current = null;
     }
 
-    if (weatherLayer && weatherConfig?.key) {
-      const tileLayer = new google.maps.ImageMapType({
-        getTileUrl(coord, zoom) {
-          return `https://tile.openweathermap.org/map/${weatherLayer}/${zoom}/${coord.x}/${coord.y}.png?appid=${weatherConfig.key}`;
-        },
-        tileSize: new google.maps.Size(256, 256),
-        opacity: 0.6,
-        name: "Weather",
+    if (!weatherLayer || !weatherConfig?.key) return;
+
+    const currentLayer = weatherLayer;
+    const apiKey = weatherConfig.key;
+    let cancelled = false;
+
+    fetch(`https://tile.openweathermap.org/map/${currentLayer}/0/0/0.png?appid=${apiKey}`)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.status === 401 || res.status === 403) {
+          toast({
+            title: "Weather Layer Unavailable",
+            description: "Your OpenWeatherMap API key may still be activating. New keys can take up to 2 hours. Please try again later.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!googleMap.current) return;
+        const tileLayer = new google.maps.ImageMapType({
+          getTileUrl(coord, zoom) {
+            return `https://tile.openweathermap.org/map/${currentLayer}/${zoom}/${coord.x}/${coord.y}.png?appid=${apiKey}`;
+          },
+          tileSize: new google.maps.Size(256, 256),
+          opacity: 0.6,
+          name: "Weather",
+        });
+        googleMap.current.overlayMapTypes.push(tileLayer);
+        weatherTileLayer.current = tileLayer;
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast({
+          title: "Weather Layer Error",
+          description: "Could not load weather tiles. Please check your connection.",
+          variant: "destructive",
+        });
       });
-      googleMap.current.overlayMapTypes.push(tileLayer);
-      weatherTileLayer.current = tileLayer;
-    }
-  }, [weatherLayer, mapsReady, weatherConfig]);
+
+    return () => { cancelled = true; };
+  }, [weatherLayer, mapInitialized, weatherConfig, toast]);
 
   const isMultiDay = rangeStart !== rangeEnd;
 
