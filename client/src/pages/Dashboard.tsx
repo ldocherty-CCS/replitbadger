@@ -30,7 +30,7 @@ import { JobDetailsDialog } from "@/components/JobDetailsDialog";
 import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
 import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
-import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, Eye, Search, X, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, FileText, Eye, Search, X, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -93,7 +93,7 @@ function DayCell({
   onRestore: (job: Job) => void,
   onCellClick: (date: string, operatorId: number) => void,
   onPlaceHold: (date: string, operatorId: number) => void,
-  onAddNote: (date: string, operatorId: number) => void,
+  onAddNote: (date: string, operatorId: number, noteType: string) => void,
   onRemoveOff: (operatorId: number, date: string) => void,
   isEvenRow?: boolean,
   isOff?: boolean,
@@ -161,13 +161,15 @@ function DayCell({
         data-testid={`cell-${operatorId}-${date}`}
       >
         {(() => {
-          const noteJobs = jobs.filter(j => !j.customerId);
+          const dayNotes = jobs.filter(j => !j.customerId && (j as any).noteType !== "dispatch_note");
+          const dispatchNotes = jobs.filter(j => !j.customerId && (j as any).noteType === "dispatch_note");
           const regularJobs = jobs.filter(j => !!j.customerId);
+          const cardJobs = [...dispatchNotes, ...regularJobs];
           return (
             <>
-              {noteJobs.length > 0 && (
+              {dayNotes.length > 0 && (
                 <div className="space-y-0.5 mb-1">
-                  {noteJobs.map(note => (
+                  {dayNotes.map(note => (
                     <div
                       key={`note-${note.id}`}
                       className="text-[9px] font-medium px-1.5 py-0.5 rounded-sm truncate cursor-pointer bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 border border-amber-200/50 dark:border-amber-700/50"
@@ -188,7 +190,7 @@ function DayCell({
                   ))}
                 </div>
               )}
-              {regularJobs
+              {cardJobs
                 .slice()
                 .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
                 .map((job, idx) => {
@@ -198,7 +200,7 @@ function DayCell({
                   <JobCard
                     job={job}
                     jobIndex={idx}
-                    totalJobs={regularJobs.length}
+                    totalJobs={cardJobs.length}
                     sameLocationIndex={locationGroupMap[job.id]?.index}
                     sameLocationTotal={locationGroupMap[job.id]?.total}
                     isAssistantEntry={isAssist}
@@ -253,12 +255,24 @@ function DayCell({
             onClick={(e) => {
               e.stopPropagation();
               setCtxMenu(null);
-              onAddNote(date, operatorId);
+              onAddNote(date, operatorId, "dispatch_note");
             }}
-            data-testid={`menu-add-note-${operatorId}-${date}`}
+            data-testid={`menu-add-dispatch-note-${operatorId}-${date}`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Add Dispatch Note
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover-elevate cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCtxMenu(null);
+              onAddNote(date, operatorId, "day_note");
+            }}
+            data-testid={`menu-add-day-note-${operatorId}-${date}`}
           >
             <StickyNote className="w-3.5 h-3.5" />
-            Add Dispatch Note
+            Add Day Note
           </button>
         </div>
       )}
@@ -475,7 +489,7 @@ function DesktopDashboard() {
   const [timeOffOpen, setTimeOffOpen] = useState(false);
   const [timeOffDefaultOp, setTimeOffDefaultOp] = useState<number | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const [noteDialog, setNoteDialog] = useState<{ open: boolean; date: string; operatorId: number; editJob?: any }>({ open: false, date: "", operatorId: 0 });
+  const [noteDialog, setNoteDialog] = useState<{ open: boolean; date: string; operatorId: number; editJob?: any; noteType?: string }>({ open: false, date: "", operatorId: 0 });
   const [viewingJob, setViewingJob] = useState<Job | null>(null);
   const [removeOffConfirm, setRemoveOffConfirm] = useState<{ open: boolean; operatorId: number; date: string; recordId: number; startDate: string; endDate: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -674,8 +688,8 @@ function DesktopDashboard() {
     setHoldDialog({ open: true, date, operatorId });
   }, []);
 
-  const handleAddNote = useCallback((date: string, operatorId: number) => {
-    setNoteDialog({ open: true, date, operatorId });
+  const handleAddNote = useCallback((date: string, operatorId: number, noteType?: string) => {
+    setNoteDialog({ open: true, date, operatorId, noteType });
   }, []);
 
   const removeTimeOffDay = useRemoveTimeOffDay();
@@ -1391,7 +1405,7 @@ function DesktopDashboard() {
         onEdit={(job) => {
           setViewingJob(null);
           if (!job.customerId) {
-            setNoteDialog({ open: true, date: job.scheduledDate, operatorId: job.operatorId || 0, editJob: job });
+            setNoteDialog({ open: true, date: job.scheduledDate, operatorId: job.operatorId || 0, editJob: job, noteType: (job as any).noteType });
           } else {
             setSelectedJob(job); setDefaultDate(undefined); setDefaultOperatorId(null); setDefaultStatus(undefined); setIsCreateOpen(true);
           }
@@ -1404,6 +1418,7 @@ function DesktopDashboard() {
         date={noteDialog.date}
         operatorId={noteDialog.operatorId}
         editJob={noteDialog.editJob}
+        noteType={noteDialog.noteType}
       />
 
       <AlertDialog open={!!removeOffConfirm?.open} onOpenChange={(open) => { if (!open) setRemoveOffConfirm(null); }}>

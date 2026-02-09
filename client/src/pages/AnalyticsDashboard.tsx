@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useJobs } from "@/hooks/use-jobs";
 import { useTimeOff } from "@/hooks/use-time-off";
@@ -13,6 +13,9 @@ import {
   differenceInDays,
   isWithinInterval,
   isBefore,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
 } from "date-fns";
 import {
   Loader2,
@@ -25,6 +28,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { Operator, Qualification } from "@shared/schema";
 
 function parseCity(address: string): string {
@@ -36,7 +40,10 @@ function parseCity(address: string): string {
 }
 
 export default function AnalyticsDashboard() {
-  const { data: jobs, isLoading: jobsLoading } = useJobs();
+  const [rangeStart, setRangeStart] = useState(() => format(new Date(new Date().getFullYear(), 0, 1), "yyyy-MM-dd"));
+  const [rangeEnd, setRangeEnd] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
+  const { data: jobs, isLoading: jobsLoading } = useJobs({ startDate: rangeStart, endDate: rangeEnd });
   const { data: timeOffRecords, isLoading: timeOffLoading } = useTimeOff();
   const { data: operators, isLoading: operatorsLoading } = useOperators();
 
@@ -61,6 +68,10 @@ export default function AnalyticsDashboard() {
   });
 
   const isLoading = jobsLoading || timeOffLoading || operatorsLoading || oqLoading;
+
+  const isYTD = rangeStart === format(new Date(new Date().getFullYear(), 0, 1), "yyyy-MM-dd") && rangeEnd === format(new Date(), "yyyy-MM-dd");
+  const isThisMonth = rangeStart === format(startOfMonth(new Date()), "yyyy-MM-dd") && rangeEnd === format(new Date(), "yyyy-MM-dd");
+  const isLastMonth = rangeStart === format(startOfMonth(subMonths(new Date(), 1)), "yyyy-MM-dd") && rangeEnd === format(endOfMonth(subMonths(new Date(), 1)), "yyyy-MM-dd");
 
   const operatorMap = useMemo(() => {
     const map = new Map<number, Operator>();
@@ -149,19 +160,43 @@ export default function AnalyticsDashboard() {
       .map(([region, count]) => ({ region, count }));
   }, [jobs]);
 
-  const standbyData = useMemo(() => {
-    if (!jobs) return { total: 0, byCustomer: [] as { name: string; count: number }[] };
-    const standbyJobs = jobs.filter((j) => j.status === "standby");
-    const customerMap = new Map<string, number>();
+  const unservicedDemandData = useMemo(() => {
+    if (!jobs || !operators) return { total: 0, standbyCount: 0, outOfStateCount: 0, byCustomer: [] as { name: string; count: number; type: string }[] };
+
+    const outOfStateOpIds = new Set(operators.filter(op => op.isOutOfState).map(op => op.id));
+
+    const standbyJobs = jobs.filter(j => j.status === "standby");
+    const outOfStateJobs = jobs.filter(j => j.status !== "standby" && j.status !== "cancelled" && j.operatorId && outOfStateOpIds.has(j.operatorId));
+
+    const allUnserviced = [...standbyJobs, ...outOfStateJobs];
+    const customerMap = new Map<string, { count: number; type: string }>();
+
     for (const job of standbyJobs) {
       const name = job.customer?.name || "Unknown";
-      customerMap.set(name, (customerMap.get(name) || 0) + 1);
+      const existing = customerMap.get(name);
+      customerMap.set(name, { count: (existing?.count || 0) + 1, type: "standby" });
     }
+    for (const job of outOfStateJobs) {
+      const name = job.customer?.name || "Unknown";
+      const existing = customerMap.get(name);
+      if (existing) {
+        customerMap.set(name, { count: existing.count + 1, type: existing.type === "standby" ? "mixed" : "out_of_state" });
+      } else {
+        customerMap.set(name, { count: 1, type: "out_of_state" });
+      }
+    }
+
     const byCustomer = Array.from(customerMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-    return { total: standbyJobs.length, byCustomer };
-  }, [jobs]);
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, data]) => ({ name, count: data.count, type: data.type }));
+
+    return {
+      total: allUnserviced.length,
+      standbyCount: standbyJobs.length,
+      outOfStateCount: outOfStateJobs.length,
+      byCustomer
+    };
+  }, [jobs, operators]);
 
   const cancelledData = useMemo(() => {
     if (!jobs) return { total: 0, recent: [] as any[] };
@@ -221,6 +256,43 @@ export default function AnalyticsDashboard() {
       <h1 className="text-2xl font-bold mb-6" data-testid="text-page-title">
         Analytics
       </h1>
+
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted-foreground">From</label>
+          <input
+            type="date"
+            value={rangeStart}
+            onChange={(e) => setRangeStart(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            data-testid="input-analytics-start-date"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted-foreground">To</label>
+          <input
+            type="date"
+            value={rangeEnd}
+            onChange={(e) => setRangeEnd(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            data-testid="input-analytics-end-date"
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant={isYTD ? "default" : "outline"} onClick={() => { setRangeStart(format(new Date(new Date().getFullYear(), 0, 1), "yyyy-MM-dd")); setRangeEnd(format(new Date(), "yyyy-MM-dd")); }} data-testid="button-filter-ytd">
+            YTD
+          </Button>
+          <Button size="sm" variant={isThisMonth ? "default" : "outline"} onClick={() => { setRangeStart(format(startOfMonth(new Date()), "yyyy-MM-dd")); setRangeEnd(format(new Date(), "yyyy-MM-dd")); }} data-testid="button-filter-this-month">
+            This Month
+          </Button>
+          <Button size="sm" variant={isLastMonth ? "default" : "outline"} onClick={() => { const d = subMonths(new Date(), 1); setRangeStart(format(startOfMonth(d), "yyyy-MM-dd")); setRangeEnd(format(endOfMonth(d), "yyyy-MM-dd")); }} data-testid="button-filter-last-month">
+            Last Month
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => { setRangeStart("2020-01-01"); setRangeEnd(format(new Date(), "yyyy-MM-dd")); }} data-testid="button-filter-all-time">
+            All Time
+          </Button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         <Card data-testid="card-time-off-by-week">
@@ -343,24 +415,33 @@ export default function AnalyticsDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
-              Standby jobs - potential hiring gap
+              Work not handled organically
             </p>
-            <div className="text-3xl font-bold mb-4" data-testid="text-standby-total">
-              {standbyData.total}
+            <div className="text-3xl font-bold mb-2" data-testid="text-unserviced-total">
+              {unservicedDemandData.total}
             </div>
-            {standbyData.byCustomer.length > 0 && (
+            <div className="flex gap-3 mb-4 text-sm text-muted-foreground">
+              <span data-testid="text-standby-count">{unservicedDemandData.standbyCount} standby</span>
+              <span data-testid="text-out-of-state-count">{unservicedDemandData.outOfStateCount} out-of-state</span>
+            </div>
+            {unservicedDemandData.byCustomer.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">
                   By customer
                 </p>
-                {standbyData.byCustomer.map((c, i) => (
+                {unservicedDemandData.byCustomer.map((c, i) => (
                   <div
                     key={i}
                     className="flex items-center justify-between gap-2 text-sm"
-                    data-testid={`row-standby-customer-${i}`}
+                    data-testid={`row-unserviced-customer-${i}`}
                   >
                     <span className="truncate">{c.name}</span>
-                    <span className="font-medium shrink-0">{c.count}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-medium">{c.count}</span>
+                      {c.type === "out_of_state" && <Badge variant="outline" className="text-[10px] shrink-0">OOS</Badge>}
+                      {c.type === "standby" && <Badge variant="outline" className="text-[10px] shrink-0">Standby</Badge>}
+                      {c.type === "mixed" && <Badge variant="outline" className="text-[10px] shrink-0">Mixed</Badge>}
+                    </div>
                   </div>
                 ))}
               </div>

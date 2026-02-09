@@ -107,6 +107,7 @@ export const jobs = pgTable("jobs", {
   assistantOperatorId: integer("assistant_operator_id").references(() => operators.id),
   sortOrder: integer("sort_order").default(0),
   seriesId: text("series_id"),
+  noteType: text("note_type"),
   createdBy: varchar("created_by").references(() => users.id),
   
   createdAt: timestamp("created_at").defaultNow(),

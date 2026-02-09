@@ -37,14 +37,16 @@ interface DispatchNoteDialogProps {
   date: string;
   operatorId: number;
   editJob?: Job;
+  noteType?: string;
 }
 
-export function DispatchNoteDialog({ open, onOpenChange, date, operatorId, editJob }: DispatchNoteDialogProps) {
+export function DispatchNoteDialog({ open, onOpenChange, date, operatorId, editJob, noteType }: DispatchNoteDialogProps) {
   const { data: operators } = useOperators();
   const createJob = useCreateJob();
   const updateJob = useUpdateJob();
   const operator = operators?.find(op => op.id === (editJob?.operatorId || operatorId));
   const isEditing = !!editJob;
+  const effectiveNoteType = noteType || (editJob as any)?.noteType || "day_note";
 
   const form = useForm<NoteValues>({
     resolver: zodResolver(noteSchema),
@@ -69,6 +71,7 @@ export function DispatchNoteDialog({ open, onOpenChange, date, operatorId, editJ
         scheduledDate: date,
         address: "",
         status: "dispatched",
+        noteType: effectiveNoteType,
       });
     }
     onOpenChange(false);
@@ -79,7 +82,9 @@ export function DispatchNoteDialog({ open, onOpenChange, date, operatorId, editJ
       <DialogContent className="max-w-md" data-testid="dialog-dispatch-note">
         <DialogHeader>
           <DialogTitle data-testid="text-dispatch-note-title">
-            {isEditing ? "Edit Dispatch Note" : "Add Dispatch Note"}
+            {isEditing
+              ? (effectiveNoteType === "dispatch_note" ? "Edit Dispatch Note" : "Edit Day Note")
+              : (effectiveNoteType === "dispatch_note" ? "Add Dispatch Note" : "Add Day Note")}
           </DialogTitle>
           {operator && date && (
             <p className="text-sm text-muted-foreground mt-1">
