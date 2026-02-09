@@ -566,8 +566,49 @@ export async function registerRoutes(
         }
       }
 
+      const offDays = new Set<string>();
+      const opId = input.job.operatorId;
+      if (opId) {
+        const timeOffRecords = await storage.getOperatorTimeOff({ operatorId: opId });
+        for (const record of timeOffRecords) {
+          let current = new Date(record.startDate + "T00:00:00");
+          const recordEnd = new Date(record.endDate + "T00:00:00");
+          while (current <= recordEnd) {
+            offDays.add(current.toISOString().split("T")[0]);
+            current.setDate(current.getDate() + 1);
+          }
+        }
+
+        const operator = await storage.getOperator(opId);
+        if (operator?.isOutOfState) {
+          const availWindows = await storage.getOperatorAvailability(opId);
+          if (availWindows.length > 0) {
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+              const dateStr = d.toISOString().split("T")[0];
+              const isAvailable = availWindows.some(
+                (w) => dateStr >= w.startDate && dateStr <= w.endDate
+              );
+              if (!isAvailable) {
+                offDays.add(dateStr);
+              }
+            }
+          } else if (operator.availableFrom || operator.availableTo) {
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+              const dateStr = d.toISOString().split("T")[0];
+              if (operator.availableFrom && dateStr < operator.availableFrom) {
+                offDays.add(dateStr);
+              }
+              if (operator.availableTo && dateStr > operator.availableTo) {
+                offDays.add(dateStr);
+              }
+            }
+          }
+        }
+      }
+
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split("T")[0];
+        const isOffDay = offDays.has(dateStr);
         const job = await storage.createJob({
           ...input.job,
           lat: jobLat,
@@ -578,6 +619,8 @@ export async function registerRoutes(
           scheduledDate: dateStr,
           seriesId,
           createdBy: userId,
+          operatorId: isOffDay ? null : input.job.operatorId,
+          status: isOffDay ? "standby" : (input.job.status || "missing_info"),
         } as any);
         created.push(job);
       }
@@ -588,6 +631,39 @@ export async function registerRoutes(
         return res.status(400).json({ message: err.errors[0].message });
       }
       res.status(500).json({ message: "Failed to create job series" });
+    }
+  });
+
+  // === Series Delete ===
+  app.delete("/api/jobs/series/:seriesId", async (req, res) => {
+    try {
+      const seriesId = req.params.seriesId;
+      const fromDate = req.query.fromDate as string;
+      if (!fromDate) {
+        return res.status(400).json({ message: "fromDate query param is required" });
+      }
+      const deleted = await storage.deleteJobsBySeries(seriesId, fromDate);
+      res.json({ deleted });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete series jobs" });
+    }
+  });
+
+  // === Series Move ===
+  app.patch("/api/jobs/series/:seriesId/move", async (req, res) => {
+    try {
+      const seriesId = req.params.seriesId;
+      const { operatorId, fromDate } = z.object({
+        operatorId: z.number(),
+        fromDate: z.string(),
+      }).parse(req.body);
+      const updated = await storage.moveJobsSeries(seriesId, operatorId, fromDate);
+      res.json({ updated });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to move series jobs" });
     }
   });
 

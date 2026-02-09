@@ -19,7 +19,7 @@ import {
 } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { useJobs, useUpdateJob, useDeleteJob, useDuplicateJob } from "@/hooks/use-jobs";
+import { useJobs, useUpdateJob, useDeleteJob, useDuplicateJob, useDeleteJobSeries, useMoveJobSeries } from "@/hooks/use-jobs";
 import { queryClient } from "@/lib/queryClient";
 import { useOperators } from "@/hooks/use-operators";
 import { JobCard, wasContextAction } from "@/components/JobCard";
@@ -42,6 +42,14 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn, formatOperatorShortName, formatOperatorFullName } from "@/lib/utils";
 import { getOperatorColor } from "@/lib/operator-colors";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -77,6 +85,7 @@ function DayCell({
   onPlaceHold,
   onAddNote,
   onRemoveOff,
+  onOffDayClick,
   isEvenRow,
   isOff,
 }: { 
@@ -95,6 +104,7 @@ function DayCell({
   onPlaceHold: (date: string, operatorId: number) => void,
   onAddNote: (date: string, operatorId: number, noteType: string) => void,
   onRemoveOff: (operatorId: number, date: string) => void,
+  onOffDayClick: (operatorId: number, date: string) => void,
   isEvenRow?: boolean,
   isOff?: boolean,
 }) {
@@ -167,7 +177,7 @@ function DayCell({
           style={{
             backgroundImage: "repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(239,68,68,0.15) 8px, rgba(239,68,68,0.15) 10px)",
           }}
-          onClick={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); onOffDayClick(operatorId, date); }}
           onContextMenu={handleContextMenu}
           data-testid={`off-overlay-${operatorId}-${date}`}
         >
@@ -562,8 +572,13 @@ function DesktopDashboard() {
 
   const updateJob = useUpdateJob();
   const deleteJob = useDeleteJob();
+  const deleteJobSeries = useDeleteJobSeries();
+  const moveJobSeries = useMoveJobSeries();
   const duplicateJob = useDuplicateJob();
   const { toast } = useToast();
+  const [seriesDeleteConfirm, setSeriesDeleteConfirm] = useState<{ open: boolean; job: Job | null }>({ open: false, job: null });
+  const [seriesMoveConfirm, setSeriesMoveConfirm] = useState<{ open: boolean; job: Job | null; newOperatorId: number; newDate: string }>({ open: false, job: null, newOperatorId: 0, newDate: "" });
+  const [timeOffDetailsDialog, setTimeOffDetailsDialog] = useState<{ open: boolean; operatorId: number; date: string } | null>(null);
 
   const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -687,6 +702,10 @@ function DesktopDashboard() {
     let changed = false;
 
     if (job.operatorId !== operatorId || job.scheduledDate !== dateStr) {
+      if (job.operatorId !== operatorId && (job as any).seriesId) {
+        setSeriesMoveConfirm({ open: true, job, newOperatorId: operatorId, newDate: dateStr });
+        return;
+      }
       updates.operatorId = operatorId;
       updates.scheduledDate = dateStr;
       const targetKey = `${operatorId}-${dateStr}`;
@@ -712,7 +731,11 @@ function DesktopDashboard() {
   }, [duplicateJob]);
 
   const handleDelete = useCallback((job: Job) => {
-    deleteJob.mutate(job.id);
+    if ((job as any).seriesId) {
+      setSeriesDeleteConfirm({ open: true, job });
+    } else {
+      deleteJob.mutate(job.id);
+    }
   }, [deleteJob]);
 
   const handleStatusChange = useCallback((job: Job, status: string) => {
@@ -795,6 +818,10 @@ function DesktopDashboard() {
       }
     }
   }, [timeOffRecords, operators, availabilityRecords, deleteTimeOff, removeTimeOffDay, toast, queryClient]);
+
+  const handleOffDayClick = useCallback((operatorId: number, date: string) => {
+    setTimeOffDetailsDialog({ open: true, operatorId, date });
+  }, []);
 
   const toggleGroup = useCallback((groupName: string) => {
     setCollapsedGroups(prev => {
@@ -1252,6 +1279,7 @@ function DesktopDashboard() {
                             onPlaceHold={handlePlaceHold}
                             onAddNote={handleAddNote}
                             onRemoveOff={handleRemoveOff}
+                            onOffDayClick={handleOffDayClick}
                             isEvenRow={isEven}
                             isOff={isOff}
                           />
@@ -1507,6 +1535,173 @@ function DesktopDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={seriesDeleteConfirm.open} onOpenChange={(open) => { if (!open) setSeriesDeleteConfirm({ open: false, job: null }); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Series Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              This job is part of a series. What would you like to do?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel data-testid="btn-cancel-series-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="btn-delete-single-event"
+              onClick={() => {
+                if (seriesDeleteConfirm.job) {
+                  deleteJob.mutate(seriesDeleteConfirm.job.id);
+                  setSeriesDeleteConfirm({ open: false, job: null });
+                }
+              }}
+            >
+              Delete This Event Only
+            </AlertDialogAction>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              data-testid="btn-delete-series-following"
+              onClick={() => {
+                if (seriesDeleteConfirm.job) {
+                  const job = seriesDeleteConfirm.job;
+                  deleteJobSeries.mutate({ seriesId: (job as any).seriesId, fromDate: job.scheduledDate });
+                  setSeriesDeleteConfirm({ open: false, job: null });
+                }
+              }}
+            >
+              Delete This & Following
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={seriesMoveConfirm.open} onOpenChange={(open) => { if (!open) setSeriesMoveConfirm({ open: false, job: null, newOperatorId: 0, newDate: "" }); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Move Series Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              This job is part of a series. What would you like to do?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel data-testid="btn-cancel-series-move">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="btn-move-single-day"
+              onClick={async () => {
+                if (seriesMoveConfirm.job) {
+                  const job = seriesMoveConfirm.job;
+                  const operatorId = seriesMoveConfirm.newOperatorId;
+                  const dateStr = seriesMoveConfirm.newDate;
+                  const targetKey = `${operatorId}-${dateStr}`;
+                  const existingJobs = jobsMap[targetKey] || [];
+                  const maxSort = existingJobs.reduce((max: number, j: Job) => Math.max(max, j.sortOrder ?? 0), 0);
+                  const updates: any = { id: job.id, operatorId, scheduledDate: dateStr, sortOrder: maxSort + 1 };
+                  if (job.status === "standby" || job.status === "cancelled") {
+                    updates.status = "ready";
+                  }
+                  await updateJob.mutateAsync(updates);
+                  setSeriesMoveConfirm({ open: false, job: null, newOperatorId: 0, newDate: "" });
+                }
+              }}
+            >
+              Move This Day Only
+            </AlertDialogAction>
+            <AlertDialogAction
+              data-testid="btn-move-entire-series"
+              onClick={() => {
+                if (seriesMoveConfirm.job) {
+                  const job = seriesMoveConfirm.job;
+                  moveJobSeries.mutate({ seriesId: (job as any).seriesId, operatorId: seriesMoveConfirm.newOperatorId, fromDate: job.scheduledDate });
+                  setSeriesMoveConfirm({ open: false, job: null, newOperatorId: 0, newDate: "" });
+                }
+              }}
+            >
+              Move Entire Series
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!timeOffDetailsDialog?.open} onOpenChange={(open) => { if (!open) setTimeOffDetailsDialog(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Time Off Details</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                if (!timeOffDetailsDialog) return "";
+                const op = operators?.find((o) => o.id === timeOffDetailsDialog.operatorId);
+                return op ? `${formatOperatorFullName(op)}` : "Operator";
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          {timeOffDetailsDialog && (() => {
+            const record = timeOffRecords?.find((r) =>
+              r.operatorId === timeOffDetailsDialog.operatorId &&
+              timeOffDetailsDialog.date >= r.startDate &&
+              timeOffDetailsDialog.date <= r.endDate
+            );
+            const op = operators?.find((o) => o.id === timeOffDetailsDialog.operatorId);
+            const isOosUnavailable = !record && op?.isOutOfState;
+            return (
+              <div className="space-y-3" data-testid="time-off-details-content">
+                {record ? (
+                  <>
+                    <div className="text-sm">
+                      <span className="font-medium">Dates: </span>
+                      {format(parseISO(record.startDate), "MMM d, yyyy")}
+                      {record.startDate !== record.endDate && ` - ${format(parseISO(record.endDate), "MMM d, yyyy")}`}
+                    </div>
+                    {record.reason && (
+                      <div className="text-sm">
+                        <span className="font-medium">Reason: </span>
+                        {record.reason}
+                      </div>
+                    )}
+                  </>
+                ) : isOosUnavailable ? (
+                  <div className="text-sm text-muted-foreground">
+                    This operator is out of state and not available on this date.
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    No time-off record found for this date.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {timeOffDetailsDialog && (() => {
+              const record = timeOffRecords?.find((r) =>
+                r.operatorId === timeOffDetailsDialog.operatorId &&
+                timeOffDetailsDialog.date >= r.startDate &&
+                timeOffDetailsDialog.date <= r.endDate
+              );
+              if (record) {
+                return (
+                  <Button
+                    variant="destructive"
+                    data-testid="btn-remove-time-off-from-details"
+                    onClick={() => {
+                      handleRemoveOff(timeOffDetailsDialog.operatorId, timeOffDetailsDialog.date);
+                      setTimeOffDetailsDialog(null);
+                    }}
+                  >
+                    Remove Time Off
+                  </Button>
+                );
+              }
+              return null;
+            })()}
+            <Button
+              variant="outline"
+              data-testid="btn-close-time-off-details"
+              onClick={() => setTimeOffDetailsDialog(null)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

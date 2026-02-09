@@ -146,6 +146,54 @@ export function useCreateJobSeries() {
   });
 }
 
+export function useDeleteJobSeries() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ seriesId, fromDate }: { seriesId: string; fromDate: string }) => {
+      const res = await fetch(`/api/jobs/series/${encodeURIComponent(seriesId)}?fromDate=${fromDate}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete series");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.jobs.list.path] });
+      toast({ title: "Success", description: `Deleted ${data.deleted} jobs from series` });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useMoveJobSeries() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ seriesId, operatorId, fromDate }: { seriesId: string; operatorId: number; fromDate: string }) => {
+      const res = await fetch(`/api/jobs/series/${encodeURIComponent(seriesId)}/move`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operatorId, fromDate }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to move series");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.jobs.list.path] });
+      toast({ title: "Success", description: `Moved ${data.updated} jobs in series` });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useDeleteJob() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

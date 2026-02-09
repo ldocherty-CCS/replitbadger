@@ -29,6 +29,8 @@ export interface IStorage {
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: number, updates: UpdateJobRequest): Promise<Job>;
   deleteJob(id: number): Promise<void>;
+  deleteJobsBySeries(seriesId: string, fromDate: string): Promise<number>;
+  moveJobsSeries(seriesId: string, operatorId: number, fromDate: string): Promise<number>;
   deleteAssistantJob(mainJobId: number, assistantOperatorId: number, scheduledDate: string): Promise<void>;
 
   // Qualifications
@@ -307,6 +309,27 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: number): Promise<void> {
     await db.delete(jobs).where(eq(jobs.id, id));
+  }
+
+  async deleteJobsBySeries(seriesId: string, fromDate: string): Promise<number> {
+    const matchingJobs = await db.select().from(jobs).where(
+      and(eq(jobs.seriesId, seriesId), gte(jobs.scheduledDate, fromDate))
+    );
+    for (const job of matchingJobs) {
+      if (job.additionalOperatorNeeded && job.assistantOperatorId) {
+        await this.deleteAssistantJob(job.id, job.assistantOperatorId, job.scheduledDate);
+      }
+      await db.delete(jobs).where(eq(jobs.id, job.id));
+    }
+    return matchingJobs.length;
+  }
+
+  async moveJobsSeries(seriesId: string, operatorId: number, fromDate: string): Promise<number> {
+    const result = await db.update(jobs)
+      .set({ operatorId })
+      .where(and(eq(jobs.seriesId, seriesId), gte(jobs.scheduledDate, fromDate)))
+      .returning();
+    return result.length;
   }
 
   async deleteAssistantJob(mainJobId: number, assistantOperatorId: number, scheduledDate: string): Promise<void> {
