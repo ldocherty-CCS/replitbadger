@@ -41,6 +41,12 @@ export async function registerRoutes(
     res.json({ key });
   });
 
+  app.get("/api/config/weather-key", (req, res) => {
+    const key = process.env.OPENWEATHERMAP_API_KEY;
+    if (!key) return res.status(404).json({ message: "Weather API key not configured" });
+    res.json({ key });
+  });
+
   // === Travel Time (Distance Matrix API) ===
   app.get("/api/travel-time", async (req, res) => {
     const { originLat, originLng, destLat, destLng } = req.query;

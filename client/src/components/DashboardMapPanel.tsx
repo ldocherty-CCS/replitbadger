@@ -5,10 +5,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, RefreshCw, Cloud } from "lucide-react";
 import { format, addDays, startOfWeek, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { useGoogleMapsReady } from "@/components/AddressAutocomplete";
 import { getOperatorColor } from "@/lib/operator-colors";
 import { formatOperatorFullName } from "@/lib/utils";
@@ -77,13 +79,17 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
   const rangeEnd = weekEnd || format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
   const [hideDispatched, setHideDispatched] = useState(true);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [weatherLayer, setWeatherLayer] = useState<string | null>(null);
   const { toast } = useToast();
 
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMap = useRef<google.maps.Map | null>(null);
   const googleMarkers = useRef<google.maps.Marker[]>([]);
   const googleInfoWindow = useRef<google.maps.InfoWindow | null>(null);
+  const weatherTileLayer = useRef<google.maps.ImageMapType | null>(null);
   const mapsReady = useGoogleMapsReady();
+
+  const { data: weatherConfig } = useQuery<{ key: string }>({ queryKey: ["/api/config/weather-key"] });
 
   const queryFilters = useMemo(() => {
     return { startDate: rangeStart, endDate: rangeEnd };
@@ -127,6 +133,33 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
       googleMap.current = null;
     };
   }, [mapsReady]);
+
+  useEffect(() => {
+    if (!googleMap.current || !mapsReady) return;
+
+    if (weatherTileLayer.current) {
+      const overlays = googleMap.current.overlayMapTypes;
+      for (let i = overlays.getLength() - 1; i >= 0; i--) {
+        if (overlays.getAt(i) === weatherTileLayer.current) {
+          overlays.removeAt(i);
+        }
+      }
+      weatherTileLayer.current = null;
+    }
+
+    if (weatherLayer && weatherConfig?.key) {
+      const tileLayer = new google.maps.ImageMapType({
+        getTileUrl(coord, zoom) {
+          return `https://tile.openweathermap.org/map/${weatherLayer}/${zoom}/${coord.x}/${coord.y}.png?appid=${weatherConfig.key}`;
+        },
+        tileSize: new google.maps.Size(256, 256),
+        opacity: 0.6,
+        name: "Weather",
+      });
+      googleMap.current.overlayMapTypes.push(tileLayer);
+      weatherTileLayer.current = tileLayer;
+    }
+  }, [weatherLayer, mapsReady, weatherConfig]);
 
   const isMultiDay = rangeStart !== rangeEnd;
 
@@ -379,6 +412,23 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
               Hide Dispatched
             </Label>
           </div>
+
+          <Select 
+            value={weatherLayer || "none"} 
+            onValueChange={(v) => setWeatherLayer(v === "none" ? null : v)}
+          >
+            <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="select-weather-layer">
+              <Cloud className="w-3 h-3 mr-1" />
+              <SelectValue placeholder="Weather" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No Weather</SelectItem>
+              <SelectItem value="precipitation_new">Precipitation</SelectItem>
+              <SelectItem value="clouds_new">Clouds</SelectItem>
+              <SelectItem value="temp_new">Temperature</SelectItem>
+              <SelectItem value="wind_new">Wind</SelectItem>
+            </SelectContent>
+          </Select>
 
           {jobsWithoutCoords > 0 && (
             <Button
