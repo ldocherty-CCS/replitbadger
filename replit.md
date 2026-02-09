@@ -17,7 +17,7 @@ The frontend is built with React and TypeScript, bundled by Vite. It uses Wouter
 The backend utilizes Node.js with Express and TypeScript, exposing a RESTful JSON API under `/api/`. API route definitions and Zod schemas are shared between client and server for type safety. A custom build script uses Vite for the frontend and esbuild for the server.
 
 ### Data Storage
-PostgreSQL is the primary database, managed by Drizzle ORM. The schema is defined in `shared/schema.ts` and uses a schema push approach for migrations. Key tables include `users`, `operators`, `customers`, `jobs`, `operator_qualifications`, `operator_documents`, and `sessions`.
+PostgreSQL is the primary database, managed by Drizzle ORM. The schema is defined in `shared/schema.ts` and uses a schema push approach for migrations. Key tables include `users`, `operators`, `customers`, `jobs`, `operator_qualifications`, `operator_documents`, `dump_locations`, and `sessions`.
 
 ### Authentication & Authorization
 Authentication is handled via Replit OpenID Connect (OIDC) using `express-session` and `passport` with `openid-client`. User sessions are stored in PostgreSQL. Frontend routes are protected using a `ProtectedRoute` wrapper, and backend routes use `isAuthenticated` middleware.

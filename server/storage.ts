@@ -1,8 +1,8 @@
 import { db } from "./db";
 import {
-  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff, operatorAvailability, operatorDocuments, customerContacts,
-  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff, type OperatorAvailability, type OperatorDocument, type CustomerContact,
-  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff, type InsertOperatorAvailability, type InsertOperatorDocument, type InsertCustomerContact,
+  users, operators, customers, jobs, qualifications, operatorQualifications, operatorTimeOff, operatorAvailability, operatorDocuments, customerContacts, dumpLocations,
+  type User, type Operator, type Customer, type Job, type Qualification, type OperatorQualification, type OperatorTimeOff, type OperatorAvailability, type OperatorDocument, type CustomerContact, type DumpLocation,
+  type InsertUser, type InsertOperator, type InsertCustomer, type InsertJob, type InsertQualification, type InsertOperatorQualification, type InsertOperatorTimeOff, type InsertOperatorAvailability, type InsertOperatorDocument, type InsertCustomerContact, type InsertDumpLocation,
   type UpdateOperatorRequest, type UpdateCustomerRequest, type UpdateJobRequest,
   type OperatorQualificationWithDetails
 } from "@shared/schema";
@@ -64,6 +64,11 @@ export interface IStorage {
   createCustomerContact(contact: InsertCustomerContact): Promise<CustomerContact>;
   updateCustomerContact(id: number, updates: Partial<InsertCustomerContact>): Promise<CustomerContact>;
   deleteCustomerContact(id: number): Promise<void>;
+
+  // Dump Locations
+  getDumpLocations(): Promise<DumpLocation[]>;
+  createDumpLocation(location: InsertDumpLocation): Promise<DumpLocation>;
+  deleteDumpLocation(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -159,6 +164,7 @@ export class DatabaseStorage implements IStorage {
       manifestNeeded: jobs.manifestNeeded,
       manifestNumber: jobs.manifestNumber,
       manifestDumpLocation: jobs.manifestDumpLocation,
+      manifestDumpLocationName: jobs.manifestDumpLocationName,
       scheduledDumpTimes: jobs.scheduledDumpTimes,
       remoteHose: jobs.remoteHose,
       remoteHoseLength: jobs.remoteHoseLength,
@@ -238,6 +244,7 @@ export class DatabaseStorage implements IStorage {
       manifestNeeded: jobs.manifestNeeded,
       manifestNumber: jobs.manifestNumber,
       manifestDumpLocation: jobs.manifestDumpLocation,
+      manifestDumpLocationName: jobs.manifestDumpLocationName,
       scheduledDumpTimes: jobs.scheduledDumpTimes,
       remoteHose: jobs.remoteHose,
       remoteHoseLength: jobs.remoteHoseLength,
@@ -502,6 +509,19 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCustomerContact(id: number): Promise<void> {
     await db.delete(customerContacts).where(eq(customerContacts.id, id));
+  }
+
+  async getDumpLocations(): Promise<DumpLocation[]> {
+    return await db.select().from(dumpLocations).orderBy(dumpLocations.name);
+  }
+
+  async createDumpLocation(location: InsertDumpLocation): Promise<DumpLocation> {
+    const [created] = await db.insert(dumpLocations).values(location).returning();
+    return created;
+  }
+
+  async deleteDumpLocation(id: number): Promise<void> {
+    await db.delete(dumpLocations).where(eq(dumpLocations.id, id));
   }
 }
 

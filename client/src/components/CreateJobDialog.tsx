@@ -1,11 +1,12 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertJobSchema, type Job, type CustomerContact } from "@shared/schema";
+import { insertJobSchema, type Job, type CustomerContact, type DumpLocation } from "@shared/schema";
 import { useCreateJob, useUpdateJob, useCreateJobSeries } from "@/hooks/use-jobs";
 import { useCustomers } from "@/hooks/use-customers";
 import { useOperators } from "@/hooks/use-operators";
 import { useCustomerContacts } from "@/hooks/use-customer-contacts";
+import { useDumpLocations, useCreateDumpLocation } from "@/hooks/use-dump-locations";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff, Copy, Clock, MapPin, FileText, Truck, Droplets, Search, Phone, X, Plus } from "lucide-react";
+import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff, Copy, Clock, MapPin, FileText, Truck, Droplets, Search, Phone, X, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
@@ -67,6 +68,7 @@ const formSchema = insertJobSchema.extend({
   remoteHose: z.boolean().default(false),
   manifestNumber: z.string().optional().nullable(),
   manifestDumpLocation: z.string().optional().nullable(),
+  manifestDumpLocationName: z.string().optional().nullable(),
   scheduledDumpTimes: z.array(z.string()).optional().nullable(),
 });
 
@@ -97,10 +99,15 @@ export function CreateJobDialog({
   const { data: timeOffRecords } = useTimeOff();
   const { data: availabilityRecords } = useAllOperatorAvailability();
   const { toast } = useToast();
+  const { data: dumpLocations } = useDumpLocations();
+  const createDumpLocation = useCreateDumpLocation();
   const [isMultiDay, setIsMultiDay] = useState(false);
   const [endDate, setEndDate] = useState("");
   const [jobLat, setJobLat] = useState<number | null>(null);
   const [jobLng, setJobLng] = useState<number | null>(null);
+  const [showNewDumpLocation, setShowNewDumpLocation] = useState(false);
+  const [newDumpName, setNewDumpName] = useState("");
+  const [newDumpAddress, setNewDumpAddress] = useState("");
 
   const isEditing = !!initialData;
 
@@ -126,6 +133,7 @@ export function CreateJobDialog({
       poNumber: "",
       manifestNumber: "",
       manifestDumpLocation: "",
+      manifestDumpLocationName: "",
       scheduledDumpTimes: [],
     },
   });
@@ -149,6 +157,7 @@ export function CreateJobDialog({
         poNumber: initialData.poNumber ?? "",
         manifestNumber: (initialData as any).manifestNumber ?? "",
         manifestDumpLocation: (initialData as any).manifestDumpLocation ?? "",
+        manifestDumpLocationName: (initialData as any).manifestDumpLocationName ?? "",
         scheduledDumpTimes: (initialData as any).scheduledDumpTimes ?? [],
       } as any);
       setIsMultiDay(false);
@@ -177,6 +186,7 @@ export function CreateJobDialog({
         poNumber: "",
         manifestNumber: "",
         manifestDumpLocation: "",
+        manifestDumpLocationName: "",
         scheduledDumpTimes: [],
       });
       setIsMultiDay(false);
@@ -702,41 +712,136 @@ export function CreateJobDialog({
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="manifestDumpLocation"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm">Manifest Dump Location</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            placeholder="Enter dump location"
-                            data-testid="input-manifest-dump-location"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                  <div className="space-y-2">
+                    <FormLabel className="text-sm">Dump Location</FormLabel>
+                    {!showNewDumpLocation ? (
+                      <div className="space-y-2">
+                        <Select
+                          value={form.watch("manifestDumpLocationName") && form.watch("manifestDumpLocation")
+                            ? `${form.watch("manifestDumpLocationName")}|||${form.watch("manifestDumpLocation")}`
+                            : ""}
+                          onValueChange={(val) => {
+                            if (val === "__new__") {
+                              setShowNewDumpLocation(true);
+                              setNewDumpName("");
+                              setNewDumpAddress("");
+                            } else if (val) {
+                              const [name, address] = val.split("|||");
+                              form.setValue("manifestDumpLocationName", name);
+                              form.setValue("manifestDumpLocation", address);
+                            } else {
+                              form.setValue("manifestDumpLocationName", "");
+                              form.setValue("manifestDumpLocation", "");
+                            }
+                          }}
+                        >
+                          <SelectTrigger data-testid="select-dump-location">
+                            <SelectValue placeholder="Select saved location..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {dumpLocations?.map((loc) => (
+                              <SelectItem key={loc.id} value={`${loc.name}|||${loc.address}`}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{loc.name}</span>
+                                  <span className="text-xs text-muted-foreground">{loc.address}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="__new__">
+                              <span className="flex items-center gap-1.5 text-primary">
+                                <Plus className="w-3.5 h-3.5" />
+                                Add New Location
+                              </span>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {form.watch("manifestDumpLocationName") && (
+                          <div className="text-xs text-muted-foreground flex items-start gap-1.5 pl-1">
+                            <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
+                            <span>{form.watch("manifestDumpLocation")}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+                        <Input
+                          value={newDumpName}
+                          onChange={(e) => setNewDumpName(e.target.value)}
+                          placeholder="Location name (e.g. Orchard Ridge)"
+                          data-testid="input-new-dump-name"
+                        />
+                        <AddressAutocomplete
+                          value={newDumpAddress}
+                          onChange={setNewDumpAddress}
+                          onPlaceSelect={(result) => {
+                            setNewDumpAddress(result.address);
+                          }}
+                          placeholder="Search dump address..."
+                          data-testid="input-new-dump-address"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="default"
+                            disabled={!newDumpName.trim() || !newDumpAddress.trim() || createDumpLocation.isPending}
+                            onClick={async () => {
+                              await createDumpLocation.mutateAsync({
+                                name: newDumpName.trim(),
+                                address: newDumpAddress.trim(),
+                              });
+                              form.setValue("manifestDumpLocationName", newDumpName.trim());
+                              form.setValue("manifestDumpLocation", newDumpAddress.trim());
+                              setShowNewDumpLocation(false);
+                              setNewDumpName("");
+                              setNewDumpAddress("");
+                            }}
+                            data-testid="button-save-dump-location"
+                          >
+                            {createDumpLocation.isPending ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                            ) : (
+                              <Save className="w-3.5 h-3.5 mr-1.5" />
+                            )}
+                            Save Location
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setShowNewDumpLocation(false);
+                              setNewDumpName("");
+                              setNewDumpAddress("");
+                            }}
+                            data-testid="button-cancel-dump-location"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
                     )}
-                  />
+                  </div>
 
                   <div>
                     <FormLabel className="text-sm">Scheduled Dump Times</FormLabel>
                     <div className="space-y-2 mt-1.5">
                       {(form.watch("scheduledDumpTimes") || []).map((time: string, idx: number) => (
                         <div key={idx} className="flex items-center gap-2">
-                          <Input
-                            value={time}
-                            onChange={(e) => {
-                              const current = [...(form.getValues("scheduledDumpTimes") || [])];
-                              current[idx] = e.target.value;
-                              form.setValue("scheduledDumpTimes", current);
-                            }}
-                            placeholder="e.g. 10:00 AM"
-                            className="flex-1"
-                            data-testid={`input-dump-time-${idx}`}
-                          />
+                          <div className="relative flex-1">
+                            <Clock className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <Input
+                              type="time"
+                              value={time}
+                              onChange={(e) => {
+                                const current = [...(form.getValues("scheduledDumpTimes") || [])];
+                                current[idx] = e.target.value;
+                                form.setValue("scheduledDumpTimes", current);
+                              }}
+                              className="pl-8"
+                              data-testid={`input-dump-time-${idx}`}
+                            />
+                          </div>
                           <Button
                             type="button"
                             size="icon"

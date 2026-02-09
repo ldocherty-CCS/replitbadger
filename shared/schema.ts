@@ -92,6 +92,7 @@ export const jobs = pgTable("jobs", {
   manifestNeeded: boolean("manifest_needed").default(false),
   manifestNumber: text("manifest_number"),
   manifestDumpLocation: text("manifest_dump_location"),
+  manifestDumpLocationName: text("manifest_dump_location_name"),
   scheduledDumpTimes: text("scheduled_dump_times").array(),
   
   // Remote Hose
@@ -113,6 +114,13 @@ export const jobs = pgTable("jobs", {
   noteType: text("note_type"),
   createdBy: varchar("created_by").references(() => users.id),
   
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const dumpLocations = pgTable("dump_locations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  address: text("address").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -171,6 +179,7 @@ export const insertCustomerContactSchema = createInsertSchema(customerContacts).
 export const insertOperatorTimeOffSchema = createInsertSchema(operatorTimeOff).omit({ id: true, createdAt: true });
 export const insertOperatorAvailabilitySchema = createInsertSchema(operatorAvailability).omit({ id: true, createdAt: true });
 export const insertOperatorDocumentSchema = createInsertSchema(operatorDocuments).omit({ id: true, createdAt: true });
+export const insertDumpLocationSchema = createInsertSchema(dumpLocations).omit({ id: true, createdAt: true });
 
 // === EXPLICIT API TYPES ===
 
@@ -184,6 +193,7 @@ export type OperatorTimeOff = typeof operatorTimeOff.$inferSelect;
 export type OperatorAvailability = typeof operatorAvailability.$inferSelect;
 export type CustomerContact = typeof customerContacts.$inferSelect;
 export type OperatorDocument = typeof operatorDocuments.$inferSelect;
+export type DumpLocation = typeof dumpLocations.$inferSelect;
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertOperator = z.infer<typeof insertOperatorSchema>;
@@ -195,6 +205,7 @@ export type InsertCustomerContact = z.infer<typeof insertCustomerContactSchema>;
 export type InsertOperatorTimeOff = z.infer<typeof insertOperatorTimeOffSchema>;
 export type InsertOperatorAvailability = z.infer<typeof insertOperatorAvailabilitySchema>;
 export type InsertOperatorDocument = z.infer<typeof insertOperatorDocumentSchema>;
+export type InsertDumpLocation = z.infer<typeof insertDumpLocationSchema>;
 
 export type OperatorQualificationWithDetails = OperatorQualification & {
   operator?: Operator;

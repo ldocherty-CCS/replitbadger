@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { insertDumpLocationSchema } from "@shared/schema";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
@@ -352,6 +353,38 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (err) {
       res.status(500).json({ message: "Failed to delete customer contact" });
+    }
+  });
+
+  // === Dump Locations ===
+  app.get("/api/dump-locations", async (req, res) => {
+    try {
+      const locations = await storage.getDumpLocations();
+      res.json(locations);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch dump locations" });
+    }
+  });
+
+  app.post("/api/dump-locations", async (req, res) => {
+    try {
+      const parsed = insertDumpLocationSchema.parse(req.body);
+      const location = await storage.createDumpLocation(parsed);
+      res.status(201).json(location);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0]?.message || "Invalid input" });
+      }
+      res.status(500).json({ message: "Failed to create dump location" });
+    }
+  });
+
+  app.delete("/api/dump-locations/:id", async (req, res) => {
+    try {
+      await storage.deleteDumpLocation(Number(req.params.id));
+      res.status(204).send();
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete dump location" });
     }
   });
 

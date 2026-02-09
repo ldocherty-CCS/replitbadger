@@ -157,8 +157,19 @@ export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetails
               {(job as any).manifestNumber && (
                 <DetailRow icon={<Hash className="w-4 h-4" />} label="Manifest #" value={(job as any).manifestNumber} testId="detail-manifest-number" />
               )}
-              {(job as any).manifestDumpLocation && (
-                <DetailRow icon={<MapPin className="w-4 h-4" />} label="Manifest Dump Location" value={(job as any).manifestDumpLocation} testId="detail-manifest-dump-location" />
+              {((job as any).manifestDumpLocationName || (job as any).manifestDumpLocation) && (
+                <div data-testid="detail-manifest-dump-location">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    <MapPin className="w-4 h-4" />
+                    Dump Location
+                  </div>
+                  <div className="pl-6">
+                    {(job as any).manifestDumpLocationName && (
+                      <div className="text-sm font-medium" data-testid="text-dump-location-name">{(job as any).manifestDumpLocationName}</div>
+                    )}
+                    <div className="text-sm text-muted-foreground" data-testid="text-dump-location-address">{(job as any).manifestDumpLocation}</div>
+                  </div>
+                </div>
               )}
               {(job as any).scheduledDumpTimes && (job as any).scheduledDumpTimes.length > 0 && (
                 <div className="space-y-1" data-testid="detail-scheduled-dump-times">
