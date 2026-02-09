@@ -753,12 +753,20 @@ function DesktopDashboard() {
   }, [duplicateJob]);
 
   const handleDelete = useCallback((job: Job) => {
-    if ((job as any).seriesId) {
-      setSeriesDeleteConfirm({ open: true, job });
+    const seriesId = (job as any).seriesId;
+    if (seriesId) {
+      const futureSeriesJobs = jobs?.filter(
+        (j) => (j as any).seriesId === seriesId && j.id !== job.id && j.scheduledDate > (job as any).scheduledDate
+      );
+      if (futureSeriesJobs && futureSeriesJobs.length > 0) {
+        setSeriesDeleteConfirm({ open: true, job });
+      } else {
+        deleteJob.mutate(job.id);
+      }
     } else {
       deleteJob.mutate(job.id);
     }
-  }, [deleteJob]);
+  }, [deleteJob, jobs]);
 
   const handleStatusChange = useCallback((job: Job, status: string) => {
     updateJob.mutate({ id: job.id, status });
