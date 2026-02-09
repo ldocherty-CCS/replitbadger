@@ -30,7 +30,7 @@ import { JobDetailsDialog } from "@/components/JobDetailsDialog";
 import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
 import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff, useCreateTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
-import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, FileText, Eye, Search, X, Calendar, Trash2, Keyboard, Undo2, Sun, CloudSun, CloudFog, CloudRain, Snowflake, CloudLightning } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, FileText, Eye, Search, X, Calendar, Trash2, Keyboard, Undo2, Sun, CloudSun, CloudFog, CloudRain, Snowflake, CloudLightning, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -1423,9 +1423,11 @@ function DesktopDashboard() {
                       <div
                         className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground mt-0.5"
                         data-testid={`weather-${day.iso}`}
+                        title="Milwaukee, WI forecast"
                       >
+                        <MapPin className="w-2.5 h-2.5 opacity-60" />
                         <WeatherIcon code={weather.code} />
-                        <span>{weather.high}°/{weather.low}°</span>
+                        <span>MKE {weather.high}°/{weather.low}°</span>
                       </div>
                     )}
                   </div>
