@@ -1410,7 +1410,7 @@ function DesktopDashboard() {
                   operators={visibleOperators} 
                   jobs={jobs} 
                   weekStart={format(startDate, "yyyy-MM-dd")}
-                  weekEnd={format(addDays(startDate, 4), "yyyy-MM-dd")}
+                  weekEnd={format(addDays(startDate, 6), "yyyy-MM-dd")}
                 />
               </div>
             </>

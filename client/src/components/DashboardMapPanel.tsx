@@ -5,13 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Loader2, RefreshCw } from "lucide-react";
 import { format, addDays, startOfWeek, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -80,13 +73,9 @@ function createTruckMarkerSvg(color: string): string {
 }
 
 export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd }: DashboardMapPanelProps) {
-  const monday = weekStart || format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const friday = weekEnd || format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), "yyyy-MM-dd");
-
   const rangeStart = weekStart || format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const rangeEnd = weekEnd || format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), "yyyy-MM-dd");
+  const rangeEnd = weekEnd || format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
   const [hideDispatched, setHideDispatched] = useState(true);
-  const [seriesFilter, setSeriesFilter] = useState<string>("all");
   const [isBackfilling, setIsBackfilling] = useState(false);
   const { toast } = useToast();
 
@@ -112,30 +101,9 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
     if (hideDispatched) {
       result = result.filter((j) => j.status !== "dispatched");
     }
-    if (seriesFilter && seriesFilter !== "all") {
-      result = result.filter((j) => j.seriesId === seriesFilter);
-    }
     return result;
-  }, [jobs, hideDispatched, seriesFilter]);
+  }, [jobs, hideDispatched]);
 
-  const seriesOptions = useMemo(() => {
-    if (!jobs) return [];
-    const seriesMap = new Map<string, { id: string; label: string; count: number }>();
-    (jobs as any[]).forEach((j) => {
-      if (j.seriesId) {
-        if (!seriesMap.has(j.seriesId)) {
-          const customerName = j.customer?.name || "Unknown";
-          seriesMap.set(j.seriesId, {
-            id: j.seriesId,
-            label: `${customerName} - ${j.scope?.substring(0, 30) || "No scope"}`,
-            count: 0,
-          });
-        }
-        seriesMap.get(j.seriesId)!.count++;
-      }
-    });
-    return Array.from(seriesMap.values());
-  }, [jobs]);
 
   useEffect(() => {
     if (!mapsReady || !mapRef.current) return;
@@ -411,22 +379,6 @@ export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd
               Hide Dispatched
             </Label>
           </div>
-
-          {seriesOptions.length > 0 && (
-            <Select value={seriesFilter} onValueChange={setSeriesFilter}>
-              <SelectTrigger className="w-44 text-xs" data-testid="select-map-series-filter">
-                <SelectValue placeholder="Filter by series" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Jobs</SelectItem>
-                {seriesOptions.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.label} ({s.count})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
 
           {jobsWithoutCoords > 0 && (
             <Button
