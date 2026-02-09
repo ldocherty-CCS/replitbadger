@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash, Droplets, Trash2, Cable } from "lucide-react";
+import { MapPin, Clock, Users, FileText, Phone, UserCircle, Briefcase, Pencil, ShieldAlert, AlertTriangle, CheckCircle2, Hash, Droplets, Trash2, Cable, ClipboardList } from "lucide-react";
 import type { Job, Customer, Operator } from "@shared/schema";
 import { format, parseISO } from "date-fns";
 import { formatOperatorFullName } from "@/lib/utils";
@@ -151,6 +151,30 @@ export function JobDetailsDialog({ job, open, onOpenChange, onEdit }: JobDetails
               </div>
             )}
           </div>
+
+          {job.manifestNeeded && ((job as any).manifestNumber || (job as any).manifestDumpLocation || ((job as any).scheduledDumpTimes && (job as any).scheduledDumpTimes.length > 0)) && (
+            <div className="space-y-3 pl-4 border-l-2 border-amber-500/30">
+              {(job as any).manifestNumber && (
+                <DetailRow icon={<Hash className="w-4 h-4" />} label="Manifest #" value={(job as any).manifestNumber} testId="detail-manifest-number" />
+              )}
+              {(job as any).manifestDumpLocation && (
+                <DetailRow icon={<MapPin className="w-4 h-4" />} label="Manifest Dump Location" value={(job as any).manifestDumpLocation} testId="detail-manifest-dump-location" />
+              )}
+              {(job as any).scheduledDumpTimes && (job as any).scheduledDumpTimes.length > 0 && (
+                <div className="space-y-1" data-testid="detail-scheduled-dump-times">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    <ClipboardList className="w-4 h-4" />
+                    Scheduled Dump Times
+                  </div>
+                  <div className="pl-6 space-y-0.5">
+                    {(job as any).scheduledDumpTimes.map((time: string, idx: number) => (
+                      <div key={idx} className="text-sm font-medium" data-testid={`text-dump-time-${idx}`}>{time}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {(job as any).creator && (
             <div className="pt-2 border-t">

@@ -1361,7 +1361,12 @@ function DesktopDashboard() {
                 style={{ width: `${100 - splitPercent}%` }}
                 data-testid="map-panel"
               >
-                <DashboardMapPanel operators={visibleOperators} jobs={jobs} />
+                <DashboardMapPanel 
+                  operators={visibleOperators} 
+                  jobs={jobs} 
+                  weekStart={format(startDate, "yyyy-MM-dd")}
+                  weekEnd={format(addDays(startDate, 4), "yyyy-MM-dd")}
+                />
               </div>
             </>
           )}

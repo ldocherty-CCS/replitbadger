@@ -23,6 +23,8 @@ import { formatOperatorFullName } from "@/lib/utils";
 interface DashboardMapPanelProps {
   operators?: any[];
   jobs?: any[];
+  weekStart?: string;
+  weekEnd?: string;
 }
 
 const STATUS_COLORS: Record<string, { label: string; hex: string }> = {
@@ -77,9 +79,9 @@ function createTruckMarkerSvg(color: string): string {
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><rect x="2" y="2" width="24" height="24" rx="4" fill="${color}" stroke="white" stroke-width="3"/><g transform="translate(6,6)"><path d="M10 14V4a1.5 1.5 0 0 0-1.5-1.5h-6A1.5 1.5 0 0 0 1 4v8.25a.75.75 0 0 0 .75.75h1.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.25 14H6.75" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="M14.25 14h1.5a.75.75 0 0 0 .75-.75v-2.74a.75.75 0 0 0-.165-.468l-2.61-3.26A.75.75 0 0 0 13.14 6.5H10.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12.75" cy="14" r="1.5" fill="none" stroke="white" stroke-width="1.5"/><circle cx="5.25" cy="14" r="1.5" fill="none" stroke="white" stroke-width="1.5"/></g></svg>`)}`;
 }
 
-export function DashboardMapPanel({ operators: propOperators }: DashboardMapPanelProps) {
-  const monday = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const friday = format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), "yyyy-MM-dd");
+export function DashboardMapPanel({ operators: propOperators, weekStart, weekEnd }: DashboardMapPanelProps) {
+  const monday = weekStart || format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const friday = weekEnd || format(addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 4), "yyyy-MM-dd");
 
   const [rangeStart, setRangeStart] = useState(monday);
   const [rangeEnd, setRangeEnd] = useState(friday);
@@ -87,6 +89,11 @@ export function DashboardMapPanel({ operators: propOperators }: DashboardMapPane
   const [seriesFilter, setSeriesFilter] = useState<string>("all");
   const [isBackfilling, setIsBackfilling] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (weekStart) setRangeStart(weekStart);
+    if (weekEnd) setRangeEnd(weekEnd);
+  }, [weekStart, weekEnd]);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMap = useRef<google.maps.Map | null>(null);

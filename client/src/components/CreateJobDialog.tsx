@@ -31,7 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff, Copy, Clock, MapPin, FileText, Truck, Droplets, Search, Phone } from "lucide-react";
+import { Loader2, AlertTriangle as AlertTriangleIcon, ShieldCheck, Users, CalendarRange, CalendarOff, Copy, Clock, MapPin, FileText, Truck, Droplets, Search, Phone, X, Plus } from "lucide-react";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
@@ -65,6 +65,9 @@ const formSchema = insertJobSchema.extend({
   additionalOperatorNeeded: z.boolean().default(false),
   manifestNeeded: z.boolean().default(false),
   remoteHose: z.boolean().default(false),
+  manifestNumber: z.string().optional().nullable(),
+  manifestDumpLocation: z.string().optional().nullable(),
+  scheduledDumpTimes: z.array(z.string()).optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -121,6 +124,9 @@ export function CreateJobDialog({
       requestorContact: "",
       onSiteContact: "",
       poNumber: "",
+      manifestNumber: "",
+      manifestDumpLocation: "",
+      scheduledDumpTimes: [],
     },
   });
 
@@ -141,6 +147,9 @@ export function CreateJobDialog({
         requestorContact: initialData.requestorContact ?? "",
         onSiteContact: initialData.onSiteContact ?? "",
         poNumber: initialData.poNumber ?? "",
+        manifestNumber: (initialData as any).manifestNumber ?? "",
+        manifestDumpLocation: (initialData as any).manifestDumpLocation ?? "",
+        scheduledDumpTimes: (initialData as any).scheduledDumpTimes ?? [],
       } as any);
       setIsMultiDay(false);
       setEndDate("");
@@ -166,6 +175,9 @@ export function CreateJobDialog({
         requestorContact: "",
         onSiteContact: "",
         poNumber: "",
+        manifestNumber: "",
+        manifestDumpLocation: "",
+        scheduledDumpTimes: [],
       });
       setIsMultiDay(false);
       setEndDate("");
@@ -177,6 +189,7 @@ export function CreateJobDialog({
   const watchedOperatorId = form.watch("operatorId");
   const watchedDate = form.watch("scheduledDate");
   const watchedRemoteHose = form.watch("remoteHose");
+  const watchedManifestNeeded = form.watch("manifestNeeded");
   const watchedStatus = form.watch("status");
 
   const operatorOffDays = useMemo(() => {
@@ -667,6 +680,95 @@ export function CreateJobDialog({
                   )}
                 />
               </div>
+
+              {watchedManifestNeeded && (
+                <div className="space-y-3 pl-6 border-l-2 border-amber-500/30">
+                  <FormField
+                    control={form.control}
+                    name="manifestNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm">Manifest #</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ""}
+                            placeholder="Enter manifest number"
+                            data-testid="input-manifest-number"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="manifestDumpLocation"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm">Manifest Dump Location</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ""}
+                            placeholder="Enter dump location"
+                            data-testid="input-manifest-dump-location"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div>
+                    <FormLabel className="text-sm">Scheduled Dump Times</FormLabel>
+                    <div className="space-y-2 mt-1.5">
+                      {(form.watch("scheduledDumpTimes") || []).map((time: string, idx: number) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Input
+                            value={time}
+                            onChange={(e) => {
+                              const current = [...(form.getValues("scheduledDumpTimes") || [])];
+                              current[idx] = e.target.value;
+                              form.setValue("scheduledDumpTimes", current);
+                            }}
+                            placeholder="e.g. 10:00 AM"
+                            className="flex-1"
+                            data-testid={`input-dump-time-${idx}`}
+                          />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              const current = [...(form.getValues("scheduledDumpTimes") || [])];
+                              current.splice(idx, 1);
+                              form.setValue("scheduledDumpTimes", current);
+                            }}
+                            data-testid={`button-remove-dump-time-${idx}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const current = form.getValues("scheduledDumpTimes") || [];
+                          form.setValue("scheduledDumpTimes", [...current, ""]);
+                        }}
+                        data-testid="button-add-dump-time"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1.5" />
+                        Add Dump Time
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
