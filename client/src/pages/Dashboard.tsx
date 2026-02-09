@@ -247,8 +247,8 @@ function DayCell({
                     onStatusChange={onStatusChange}
                     onCancel={onCancel}
                     onRestore={onRestore}
-                    onMoveUp={onMoveUp}
-                    onMoveDown={onMoveDown}
+                    onMoveUp={isAssist ? undefined : onMoveUp}
+                    onMoveDown={isAssist ? undefined : onMoveDown}
                   />
                 </div>
                 );
