@@ -16,6 +16,8 @@ import {
   startOfMonth,
   endOfMonth,
   subMonths,
+  eachDayOfInterval,
+  isWeekend,
 } from "date-fns";
 import {
   Loader2,
@@ -25,6 +27,11 @@ import {
   Clock,
   XCircle,
   Trophy,
+  BarChart3,
+  TrendingUp,
+  Minus,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -232,6 +239,89 @@ export default function AnalyticsDashboard() {
         percentage: total > 0 ? Math.round((count / total) * 100) : 0,
       }));
   }, [jobs]);
+
+  const operatorUtilization = useMemo(() => {
+    if (!jobs || !operators || !timeOffRecords) return { operators: [] as { name: string; utilization: number }[], average: 0 };
+
+    const rangeStartDate = parseISO(rangeStart);
+    const rangeEndDate = parseISO(rangeEnd);
+    const allDaysInRange = eachDayOfInterval({ start: rangeStartDate, end: rangeEndDate });
+    const totalWeekdays = allDaysInRange.filter(d => !isWeekend(d)).length;
+
+    const nonAssistants = operators.filter(op => op.operatorType !== "assistant");
+
+    const activeJobs = jobs.filter(j => j.status !== "cancelled" && j.status !== "standby");
+
+    const opJobDates = new Map<number, Set<string>>();
+    for (const job of activeJobs) {
+      if (!job.operatorId || !job.scheduledDate) continue;
+      if (!opJobDates.has(job.operatorId)) opJobDates.set(job.operatorId, new Set());
+      opJobDates.get(job.operatorId)!.add(job.scheduledDate);
+    }
+
+    const opTimeOffDays = new Map<number, number>();
+    for (const record of timeOffRecords) {
+      if (!record.operatorId) continue;
+      const recStart = parseISO(record.startDate);
+      const recEnd = parseISO(record.endDate);
+      const overlapStart = recStart < rangeStartDate ? rangeStartDate : recStart;
+      const overlapEnd = recEnd > rangeEndDate ? rangeEndDate : recEnd;
+      if (overlapStart > overlapEnd) continue;
+      const overlapDays = eachDayOfInterval({ start: overlapStart, end: overlapEnd });
+      const weekdayOff = overlapDays.filter(d => !isWeekend(d)).length;
+      opTimeOffDays.set(record.operatorId, (opTimeOffDays.get(record.operatorId) || 0) + weekdayOff);
+    }
+
+    const results: { name: string; utilization: number }[] = [];
+    for (const op of nonAssistants) {
+      const bookedDays = opJobDates.get(op.id)?.size || 0;
+      const timeOffDays = opTimeOffDays.get(op.id) || 0;
+      const availableDays = Math.max(totalWeekdays - timeOffDays, 1);
+      const utilization = Math.min(Math.round((bookedDays / availableDays) * 100), 100);
+      results.push({ name: formatOperatorFullName(op as Operator), utilization });
+    }
+
+    results.sort((a, b) => b.utilization - a.utilization);
+    const average = results.length > 0 ? Math.round(results.reduce((sum, r) => sum + r.utilization, 0) / results.length) : 0;
+
+    return { operators: results, average };
+  }, [jobs, operators, timeOffRecords, rangeStart, rangeEnd]);
+
+  const repeatCustomerInsights = useMemo(() => {
+    if (!jobs || topCustomers.length === 0) return [];
+
+    const rangeStartDate = parseISO(rangeStart);
+    const rangeEndDate = parseISO(rangeEnd);
+    const totalMs = rangeEndDate.getTime() - rangeStartDate.getTime();
+    const periodMs = totalMs / 4;
+
+    const top8 = topCustomers.slice(0, 8);
+    const activeJobs = jobs.filter(j => j.status !== "cancelled" && j.status !== "standby");
+
+    return top8.map(customer => {
+      const customerJobs = activeJobs.filter(j => (j.customer?.name || "Unknown") === customer.name);
+      const periods = [0, 0, 0, 0];
+      for (const job of customerJobs) {
+        if (!job.scheduledDate) continue;
+        const jobDate = parseISO(job.scheduledDate);
+        const elapsed = jobDate.getTime() - rangeStartDate.getTime();
+        const periodIndex = periodMs > 0 ? Math.min(Math.floor(elapsed / periodMs), 3) : 0;
+        periods[periodIndex]++;
+      }
+      const maxPeriod = Math.max(...periods, 1);
+      let trend: "up" | "down" | "flat" = "flat";
+      if (periods[3] > periods[0]) trend = "up";
+      else if (periods[3] < periods[0]) trend = "down";
+
+      return {
+        name: customer.name,
+        totalJobs: customer.count,
+        periods,
+        maxPeriod,
+        trend,
+      };
+    });
+  }, [jobs, topCustomers, rangeStart, rangeEnd]);
 
   if (isLoading) {
     return (
@@ -518,6 +608,91 @@ export default function AnalyticsDashboard() {
                           }}
                         />
                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-operator-utilization">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-base font-semibold">Operator Utilization</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold mb-1" data-testid="text-avg-utilization">
+              {operatorUtilization.average}%
+            </div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
+              Average utilization
+            </p>
+            {operatorUtilization.operators.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No operator data available</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {operatorUtilization.operators.map((op, i) => (
+                  <div key={i} className="flex items-center gap-3" data-testid={`row-operator-util-${i}`}>
+                    <span className="text-xs w-24 shrink-0 truncate" title={op.name}>
+                      {op.name}
+                    </span>
+                    <div className="flex-1 h-5 bg-muted rounded-md overflow-hidden">
+                      <div
+                        className={`h-full rounded-md transition-all ${
+                          op.utilization > 75
+                            ? "bg-green-500/70"
+                            : op.utilization >= 50
+                              ? "bg-amber-500/70"
+                              : "bg-red-500/70"
+                        }`}
+                        style={{ width: `${op.utilization}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-medium w-10 text-right shrink-0" data-testid={`text-operator-util-${i}`}>
+                      {op.utilization}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-repeat-customer-insights">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-base font-semibold">Repeat Customer Insights</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
+              Booking frequency trends (top 8)
+            </p>
+            {repeatCustomerInsights.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No customer data available</p>
+            ) : (
+              <div className="space-y-2.5">
+                {repeatCustomerInsights.map((c, i) => (
+                  <div key={i} className="flex items-center gap-3" data-testid={`row-repeat-customer-${i}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm truncate">{c.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{c.totalJobs} jobs</span>
+                      </div>
+                    </div>
+                    <div className="flex items-end gap-px shrink-0" data-testid={`sparkline-${i}`}>
+                      {c.periods.map((count, pi) => (
+                        <div
+                          key={pi}
+                          className="w-[3px] bg-primary/60 rounded-sm"
+                          style={{ height: `${Math.max(4, (count / c.maxPeriod) * 20)}px` }}
+                        />
+                      ))}
+                    </div>
+                    <div className="shrink-0">
+                      {c.trend === "up" && <ChevronUp className="h-4 w-4 text-green-500" />}
+                      {c.trend === "down" && <ChevronDown className="h-4 w-4 text-red-500" />}
+                      {c.trend === "flat" && <Minus className="h-4 w-4 text-muted-foreground" />}
                     </div>
                   </div>
                 ))}

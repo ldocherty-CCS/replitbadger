@@ -30,7 +30,7 @@ import { JobDetailsDialog } from "@/components/JobDetailsDialog";
 import { DispatchNoteDialog } from "@/components/DispatchNoteDialog";
 import { useTimeOff, useRemoveTimeOffDay, useDeleteTimeOff, useCreateTimeOff } from "@/hooks/use-time-off";
 import { useAllOperatorAvailability } from "@/hooks/use-operator-availability";
-import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, FileText, Eye, Search, X, Calendar, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, PanelRightClose, PanelRightOpen, Ban, ChevronDown, ChevronUp, Clock3, RotateCcw, CalendarOff, StickyNote, FileText, Eye, Search, X, Calendar, Trash2, Keyboard, Undo2, Sun, CloudSun, CloudFog, CloudRain, Snowflake, CloudLightning } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -50,6 +50,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn, formatOperatorShortName, formatOperatorFullName } from "@/lib/utils";
 import { getOperatorColor } from "@/lib/operator-colors";
 import type { Job, Customer, Operator } from "@shared/schema";
@@ -92,6 +93,7 @@ function DayCell({
   onMoveDown,
   isEvenRow,
   isOff,
+  isFocused,
 }: { 
   date: string, 
   operatorId: number, 
@@ -114,6 +116,7 @@ function DayCell({
   onMoveDown: (job: Job) => void,
   isEvenRow?: boolean,
   isOff?: boolean,
+  isFocused?: boolean,
 }) {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -175,7 +178,8 @@ function DayCell({
         "min-h-[80px] p-1.5 border-r border-b hover:bg-accent/40 transition-colors cursor-pointer relative",
         isOff
           ? "bg-red-200/70 dark:bg-red-900/40"
-          : isEvenRow ? "bg-muted/30" : "bg-card/50"
+          : isEvenRow ? "bg-muted/30" : "bg-card/50",
+        isFocused && "ring-2 ring-primary ring-inset"
       )}
     >
       {isOff && (
@@ -469,6 +473,48 @@ export default function Dashboard() {
   return <DesktopDashboard />;
 }
 
+type UndoAction = {
+  type: 'move' | 'delete' | 'status_change' | 'cancel' | 'restore';
+  description: string;
+  jobData: any;
+  previousValues: Record<string, any>;
+} | null;
+
+function useWeatherForecast(startDate: string, endDate: string) {
+  return useQuery<Map<string, { code: number; high: number; low: number }>>({
+    queryKey: ["weather-forecast", startDate, endDate],
+    queryFn: async () => {
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=43.0389&longitude=-87.9065&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=America/Chicago&start_date=${startDate}&end_date=${endDate}`
+      );
+      if (!res.ok) throw new Error("Weather fetch failed");
+      const data = await res.json();
+      const map = new Map<string, { code: number; high: number; low: number }>();
+      const { time, weather_code, temperature_2m_max, temperature_2m_min } = data.daily;
+      for (let i = 0; i < time.length; i++) {
+        map.set(time[i], {
+          code: weather_code[i],
+          high: Math.round(temperature_2m_max[i]),
+          low: Math.round(temperature_2m_min[i]),
+        });
+      }
+      return map;
+    },
+    staleTime: 30 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+function WeatherIcon({ code }: { code: number }) {
+  if (code === 0) return <Sun className="w-3.5 h-3.5" />;
+  if (code >= 1 && code <= 3) return <CloudSun className="w-3.5 h-3.5" />;
+  if (code === 45 || code === 48) return <CloudFog className="w-3.5 h-3.5" />;
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return <CloudRain className="w-3.5 h-3.5" />;
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return <Snowflake className="w-3.5 h-3.5" />;
+  if (code >= 95 && code <= 99) return <CloudLightning className="w-3.5 h-3.5" />;
+  return <CloudSun className="w-3.5 h-3.5" />;
+}
+
 function DesktopDashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -492,6 +538,9 @@ function DesktopDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [focusedCell, setFocusedCell] = useState<{ operatorId: number; dayIndex: number } | null>(null);
+  const [undoAction, setUndoAction] = useState<UndoAction>(null);
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingSplit = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -505,6 +554,20 @@ function DesktopDashboard() {
       searchInputRef.current.focus();
     }
   }, [searchOpen]);
+
+  const setUndoWithTimeout = useCallback((action: UndoAction) => {
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    setUndoAction(action);
+    if (action) {
+      undoTimeoutRef.current = setTimeout(() => setUndoAction(null), 30000);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    };
+  }, []);
 
   const { data: searchResults, isLoading: searchLoading } = useQuery<any[]>({
     queryKey: [`/api/jobs/search?q=${encodeURIComponent(debouncedQuery)}`],
@@ -526,6 +589,8 @@ function DesktopDashboard() {
     const d = addDays(startDate, i);
     return { date: d, iso: format(d, "yyyy-MM-dd"), label: format(d, "EEE M/d") };
   });
+
+  const { data: weatherData } = useWeatherForecast(weekDays[0].iso, weekDays[6].iso);
 
   const { data: jobs, isLoading: jobsLoading } = useJobs({
     startDate: weekDays[0].iso,
@@ -556,6 +621,9 @@ function DesktopDashboard() {
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } });
   const sensors = useSensors(pointerSensor, touchSensor);
 
+  const jobsMapRef = useRef<Record<string, Job[]>>({});
+  const visibleOperatorsRef = useRef<Operator[] | undefined>(undefined);
+
   const collisionStrategy: CollisionDetection = useCallback((args) => {
     const pointerCollisions = pointerWithin(args);
     if (pointerCollisions.length > 0) return pointerCollisions;
@@ -571,6 +639,38 @@ function DesktopDashboard() {
     if (job) setActiveDragJob(job);
   };
 
+  const handleDuplicate = useCallback((job: Job) => {
+    duplicateJob.mutate(job);
+  }, [duplicateJob]);
+
+  const handleDelete = useCallback((job: Job) => {
+    const seriesId = (job as any).seriesId;
+    if (seriesId) {
+      const futureSeriesJobs = jobs?.filter(
+        (j) => (j as any).seriesId === seriesId && j.id !== job.id && j.scheduledDate > (job as any).scheduledDate
+      );
+      if (futureSeriesJobs && futureSeriesJobs.length > 0) {
+        setSeriesDeleteConfirm({ open: true, job });
+      } else {
+        setUndoWithTimeout({
+          type: 'delete',
+          description: `deleted ${(job as any).customer?.name || "job"}`,
+          jobData: job,
+          previousValues: {},
+        });
+        deleteJob.mutate(job.id);
+      }
+    } else {
+      setUndoWithTimeout({
+        type: 'delete',
+        description: `deleted ${(job as any).customer?.name || "job"}`,
+        jobData: job,
+        previousValues: {},
+      });
+      deleteJob.mutate(job.id);
+    }
+  }, [deleteJob, jobs, setUndoWithTimeout]);
+
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveDragJob(null);
     const { active, over } = event;
@@ -585,6 +685,12 @@ function DesktopDashboard() {
 
     if (dropType === "standby") {
       if (job.status !== "standby") {
+        setUndoWithTimeout({
+          type: 'move',
+          description: `moved ${(job as any).customer?.name || "job"} to standby`,
+          jobData: job,
+          previousValues: { operatorId: job.operatorId, scheduledDate: job.scheduledDate, sortOrder: job.sortOrder, status: job.status },
+        });
         await updateJob.mutateAsync({
           id: job.id,
           status: "standby",
@@ -597,6 +703,12 @@ function DesktopDashboard() {
 
     if (dropType === "cancelled") {
       if (job.status !== "cancelled") {
+        setUndoWithTimeout({
+          type: 'cancel',
+          description: `cancelled ${(job as any).customer?.name || "job"}`,
+          jobData: job,
+          previousValues: { status: job.status },
+        });
         await updateJob.mutateAsync({
           id: job.id,
           status: "cancelled",
@@ -663,43 +775,162 @@ function DesktopDashboard() {
     }
 
     if (changed) {
+      setUndoWithTimeout({
+        type: 'move',
+        description: `moved ${(job as any).customer?.name || "job"}`,
+        jobData: job,
+        previousValues: { operatorId: job.operatorId, scheduledDate: job.scheduledDate, sortOrder: job.sortOrder, status: job.status },
+      });
       await updateJob.mutateAsync(updates);
     }
   };
 
-  const handleDuplicate = useCallback((job: Job) => {
-    duplicateJob.mutate(job);
-  }, [duplicateJob]);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
 
-  const handleDelete = useCallback((job: Job) => {
-    const seriesId = (job as any).seriesId;
-    if (seriesId) {
-      const futureSeriesJobs = jobs?.filter(
-        (j) => (j as any).seriesId === seriesId && j.id !== job.id && j.scheduledDate > (job as any).scheduledDate
-      );
-      if (futureSeriesJobs && futureSeriesJobs.length > 0) {
-        setSeriesDeleteConfirm({ open: true, job });
-      } else {
-        deleteJob.mutate(job.id);
+      const anyDialogOpen = isCreateOpen || !!viewingJob || seriesDeleteConfirm.open || seriesMoveConfirm.open || !!removeOffConfirm?.open || !!timeOffDetailsDialog?.open || holdDialog.open || timeOffOpen || noteDialog.open;
+      if (anyDialogOpen) return;
+
+      const ops = visibleOperatorsRef.current;
+      if (!ops || ops.length === 0) return;
+
+      if (e.key === "Escape") {
+        setFocusedCell(null);
+        return;
       }
-    } else {
-      deleteJob.mutate(job.id);
-    }
-  }, [deleteJob, jobs]);
+
+      if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        setFocusedCell(prev => {
+          if (!prev) {
+            return { operatorId: ops[0].id, dayIndex: 0 };
+          }
+          const currentOpIdx = ops.findIndex(op => op.id === prev.operatorId);
+          if (currentOpIdx === -1) return { operatorId: ops[0].id, dayIndex: 0 };
+
+          let newOpIdx = currentOpIdx;
+          let newDayIdx = prev.dayIndex;
+
+          if (e.key === "ArrowUp") newOpIdx = Math.max(0, currentOpIdx - 1);
+          if (e.key === "ArrowDown") newOpIdx = Math.min(ops.length - 1, currentOpIdx + 1);
+          if (e.key === "ArrowLeft") newDayIdx = Math.max(0, prev.dayIndex - 1);
+          if (e.key === "ArrowRight") newDayIdx = Math.min(6, prev.dayIndex + 1);
+
+          return { operatorId: ops[newOpIdx].id, dayIndex: newDayIdx };
+        });
+        return;
+      }
+
+      if (!focusedCell) return;
+
+      const currentDate = weekDays[focusedCell.dayIndex]?.iso;
+      if (!currentDate) return;
+      const cellKey = `${focusedCell.operatorId}-${currentDate}`;
+      const cellJobs = jobsMapRef.current[cellKey] || [];
+
+      if (e.key === "n") {
+        e.preventDefault();
+        setSelectedJob(null);
+        setDefaultDate(currentDate);
+        setDefaultOperatorId(focusedCell.operatorId);
+        setDefaultStatus(undefined);
+        setIsCreateOpen(true);
+        return;
+      }
+
+      if (e.key === "d" && cellJobs.length > 0) {
+        e.preventDefault();
+        handleDuplicate(cellJobs[0]);
+        return;
+      }
+
+      if ((e.key === "Delete" || e.key === "Backspace") && cellJobs.length > 0) {
+        e.preventDefault();
+        handleDelete(cellJobs[0]);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [focusedCell, weekDays, isCreateOpen, viewingJob, seriesDeleteConfirm.open, seriesMoveConfirm.open, removeOffConfirm?.open, timeOffDetailsDialog?.open, holdDialog.open, timeOffOpen, noteDialog.open, handleDuplicate, handleDelete]);
 
   const handleStatusChange = useCallback((job: Job, status: string) => {
+    setUndoWithTimeout({
+      type: 'status_change',
+      description: `changed ${(job as any).customer?.name || "job"} status`,
+      jobData: job,
+      previousValues: { status: job.status },
+    });
     updateJob.mutate({ id: job.id, status });
-  }, [updateJob]);
+  }, [updateJob, setUndoWithTimeout]);
 
   const handleCancel = useCallback((job: Job) => {
+    setUndoWithTimeout({
+      type: 'cancel',
+      description: `cancelled ${(job as any).customer?.name || "job"}`,
+      jobData: job,
+      previousValues: { status: job.status },
+    });
     updateJob.mutate({ id: job.id, status: "cancelled" });
     toast({ title: "Job Cancelled", description: `${(job as any).customer?.name || "Job"} has been cancelled` });
-  }, [updateJob, toast]);
+  }, [updateJob, toast, setUndoWithTimeout]);
 
   const handleRestore = useCallback((job: Job) => {
+    setUndoWithTimeout({
+      type: 'restore',
+      description: `restored ${(job as any).customer?.name || "job"}`,
+      jobData: job,
+      previousValues: { status: job.status },
+    });
     updateJob.mutate({ id: job.id, status: "ready" });
     toast({ title: "Job Restored", description: `${(job as any).customer?.name || "Job"} has been restored to the board as Ready` });
-  }, [updateJob, toast]);
+  }, [updateJob, toast, setUndoWithTimeout]);
+
+  const handleUndo = useCallback(async () => {
+    if (!undoAction) return;
+    try {
+      if (undoAction.type === 'move') {
+        await updateJob.mutateAsync({
+          id: undoAction.jobData.id,
+          operatorId: undoAction.previousValues.operatorId,
+          scheduledDate: undoAction.previousValues.scheduledDate,
+          sortOrder: undoAction.previousValues.sortOrder,
+          status: undoAction.previousValues.status,
+        });
+      } else if (undoAction.type === 'delete') {
+        const job = undoAction.jobData;
+        const { id, customer, operator, createdAt, assistantOperator, creator, ...rest } = job;
+        const body: Record<string, any> = {};
+        const fields = ['customerId', 'operatorId', 'scheduledDate', 'scope', 'address', 'startTime', 'status', 'sortOrder', 'notes', 'seriesId', 'srNumber', 'lat', 'lng', 'assistantOperatorId', 'estimatedDuration', 'isSpot', 'noteType', 'dispatchNote', 'requestorContact', 'onSiteContact', 'billingInfo', 'poNumber', 'ticketCreated', 'manifestNeeded', 'manifestNumber', 'manifestDumpLocation', 'manifestDumpLocationName', 'scheduledDumpTimes', 'remoteHose', 'remoteHoseLength', 'remoteHoseOperatorId', 'water', 'dump', 'siteQuals', 'additionalOperatorNeeded', 'createdBy'];
+        for (const f of fields) {
+          if (f in rest && rest[f] !== undefined) {
+            body[f] = rest[f];
+          }
+        }
+        const res = await fetch(api.jobs.create.path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('Failed to recreate job');
+        queryClient.invalidateQueries({ queryKey: [api.jobs.list.path] });
+      } else {
+        await updateJob.mutateAsync({
+          id: undoAction.jobData.id,
+          status: undoAction.previousValues.status,
+        });
+      }
+      setUndoAction(null);
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+      toast({ title: "Action undone" });
+    } catch (err) {
+      toast({ title: "Undo failed", description: (err as Error).message, variant: "destructive" });
+    }
+  }, [undoAction, updateJob, toast]);
 
   const handleReorder = useCallback(async (job: Job, direction: "up" | "down") => {
     const operatorJobs = (jobs || [])
@@ -945,6 +1176,8 @@ function DesktopDashboard() {
     }
   });
   Object.values(jobsMap).forEach(arr => arr.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)));
+  jobsMapRef.current = jobsMap;
+  visibleOperatorsRef.current = visibleOperators;
 
   const locationGroupMap: Record<number, { index: number; total: number }> = {};
   if (jobs) {
@@ -999,6 +1232,38 @@ function DesktopDashboard() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                data-testid="button-keyboard-shortcuts"
+              >
+                <Keyboard className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="end">
+              <div className="text-sm font-semibold mb-2">Keyboard Shortcuts</div>
+              <div className="space-y-1.5 text-xs text-muted-foreground">
+                <div className="flex justify-between"><span>Navigate cells</span><span className="font-mono text-foreground">Arrow keys</span></div>
+                <div className="flex justify-between"><span>New job</span><span className="font-mono text-foreground">N</span></div>
+                <div className="flex justify-between"><span>Duplicate job</span><span className="font-mono text-foreground">D</span></div>
+                <div className="flex justify-between"><span>Delete job</span><span className="font-mono text-foreground">Del / Backspace</span></div>
+                <div className="flex justify-between"><span>Clear focus</span><span className="font-mono text-foreground">Esc</span></div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {undoAction && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUndo}
+              data-testid="button-undo"
+            >
+              <Undo2 className="w-4 h-4 mr-1.5" />
+              <span className="text-xs truncate max-w-[150px]">Undo: {undoAction.description}</span>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="icon"
@@ -1143,17 +1408,29 @@ function DesktopDashboard() {
               <div className="w-48 shrink-0 p-4 font-semibold text-sm border-r bg-muted/50 sticky left-0 z-10 flex items-center">
                 Operators
               </div>
-              {weekDays.map((day) => (
-                <div 
-                  key={day.iso} 
-                  className={cn(
-                    "flex-1 min-w-[140px] p-3 text-center border-r last:border-r-0",
-                    day.iso === format(new Date(), "yyyy-MM-dd") && "bg-primary/5"
-                  )}
-                >
-                  <div className="font-semibold text-sm">{day.label}</div>
-                </div>
-              ))}
+              {weekDays.map((day) => {
+                const weather = weatherData?.get(day.iso);
+                return (
+                  <div 
+                    key={day.iso} 
+                    className={cn(
+                      "flex-1 min-w-[140px] p-3 text-center border-r last:border-r-0",
+                      day.iso === format(new Date(), "yyyy-MM-dd") && "bg-primary/5"
+                    )}
+                  >
+                    <div className="font-semibold text-sm">{day.label}</div>
+                    {weather && (
+                      <div
+                        className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground mt-0.5"
+                        data-testid={`weather-${day.iso}`}
+                      >
+                        <WeatherIcon code={weather.code} />
+                        <span>{weather.high}°/{weather.low}°</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             <ScrollArea className="flex-1 custom-scrollbar">
@@ -1268,6 +1545,7 @@ function DesktopDashboard() {
                             onMoveDown={(job) => handleReorder(job, "down")}
                             isEvenRow={isEven}
                             isOff={isOff}
+                            isFocused={focusedCell?.operatorId === operator.id && weekDays[focusedCell?.dayIndex]?.iso === day.iso}
                           />
                         </div>
                       );
